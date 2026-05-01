@@ -1,0 +1,121 @@
+{
+  "common": {
+    "loading": "Загрузка…",
+    "home": "Главная",
+    "back": "Назад",
+    "language": "Язык",
+    "notAvailable": "—"
+  },
+  "meta": {
+    "appTitle": "AI SDR Agent",
+    "appDescription": "Админ-панель автоматизации аутрича"
+  },
+  "campaign": {
+    "status": {
+      "draft": "Черновик",
+      "active": "Активна",
+      "paused": "Пауза"
+    }
+  },
+  "lead": {
+    "status": {
+      "new": "Новый",
+      "contacted": "Связались",
+      "replied": "Ответил",
+      "interested": "Интерес",
+      "rejected": "Отказ"
+    }
+  },
+  "login": {
+    "title": "AI SDR Agent",
+    "subtitle": "Войдите в админ-панель инстанса (single-tenant).",
+    "email": "Email",
+    "password": "Пароль",
+    "submit": "Войти",
+    "submitting": "Вход…",
+    "errorInvalid": "Неверный email или пароль",
+    "errorNetwork": "Не удалось связаться с сервером. Проверьте API и сеть.",
+    "invalidLink": "Некорректная ссылка."
+  },
+  "homePage": {
+    "loading": "Загрузка…"
+  },
+  "dashboard": {
+    "brand": "AI SDR",
+    "logout": "Выйти",
+    "nav": {
+      "overview": "Обзор",
+      "campaigns": "Кампании"
+    },
+    "overview": {
+      "title": "Обзор",
+      "subtitle": "Базовый layout дашборда. В следующих фазах здесь появятся кампании и лиды.",
+      "statusCardTitle": "Статус",
+      "statusCardBody": "JWT сохранён в браузере; запросы к API выполняются с префиксом из NEXT_PUBLIC_API_URL."
+    }
+  },
+  "campaigns": {
+    "title": "Кампании",
+    "subtitle": "Промпты и правила для рассылок по лидам.",
+    "newCampaign": "Новая кампания",
+    "listTitle": "Список",
+    "listDescription": "Выберите кампанию для редактирования и загрузки CSV с лидами.",
+    "tableName": "Название",
+    "tableStatus": "Статус",
+    "tableOpen": "Открыть",
+    "empty": "Пока нет кампаний. Создайте первую.",
+    "loadError": "Не удалось загрузить"
+  },
+  "campaignNew": {
+    "backToList": "← К списку кампаний",
+    "title": "Новая кампания",
+    "cardTitle": "Параметры",
+    "cardDescription": "Системный промпт и правила для первого письма и фоллоу-апов.",
+    "name": "Название",
+    "status": "Статус",
+    "systemPrompt": "Системный промпт",
+    "firstEmailRules": "Правила первого письма",
+    "followUpRules": "Правила фоллоу-апов",
+    "saveCreate": "Создать",
+    "saving": "Сохранение…",
+    "cancel": "Отмена",
+    "saveError": "Ошибка сохранения"
+  },
+  "campaignDetail": {
+    "backToList": "← К списку кампаний",
+    "editTitle": "Редактирование",
+    "editDescription": "Промпты и статус кампании влияют на будущую генерацию писем (Фаза 4).",
+    "name": "Название",
+    "status": "Статус",
+    "systemPrompt": "Системный промпт",
+    "firstEmailRules": "Правила первого письма",
+    "followUpRules": "Правила фоллоу-апов",
+    "saveChanges": "Сохранить изменения",
+    "saving": "Сохранение…",
+    "deleteCampaign": "Удалить кампанию",
+    "csvTitle": "Импорт лидов из CSV",
+    "csvDescription": "Колонки: email (обязательно); опционально first_name / company / pain_point и синонимы (см. доку API). Разделитель: запятая или точка с запятой.",
+    "chooseCsv": "Выбрать CSV",
+    "importing": "Импорт…",
+    "importSummary": "Импорт: создано {created}, пропущено (дубликаты и т.п.) {skipped}. Ошибок парсинга: {errors}.",
+    "importError": "Ошибка импорта",
+    "loadError": "Ошибка загрузки",
+    "saveError": "Не сохранено",
+    "updateError": "Не обновлено",
+    "deleteLeadError": "Не удалено",
+    "deleteCampaignError": "Не удалено",
+    "leadsTitle": "Лиды",
+    "leadsDescription": "Email уникален глобально в инстансе: повторы при импорте пропускаются.",
+    "leadsEmpty": "Пока нет лидов. Загрузите CSV выше.",
+    "tableEmail": "Email",
+    "tableNameCol": "Имя",
+    "tableCompany": "Компания",
+    "tablePain": "Боль",
+    "tableStatus": "Статус",
+    "deleteLeadAria": "Удалить лида",
+    "confirmDeleteLead": "Удалить этого лида?",
+    "confirmDeleteCampaign": "Удалить кампанию и всех связанных лидов? Это действие необратимо.",
+    "notFound": "Кампания не найдена.",
+    "invalidLink": "Некорректная ссылка."
+  }
+}

@@ -1,0 +1,45 @@
+# --- Секреты и ключи (никогда не коммитить) ---
+.env
+**/.env
+.env.*
+**/.env.*
+# Шаблоны переменных — коммитим (в корне и во вложенных пакетах)
+!.env.example
+!**/.env.example
+*.pem
+*.key
+
+# --- Документация репозитория с инструкциями — не игнорировать ---
+# (явная страховка, если позже появятся широкие шаблоны вроде *.md)
+!project_instructions.md
+!README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+ENV/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Logs & local tooling
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+htmlcov/

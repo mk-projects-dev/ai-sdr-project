@@ -1,0 +1,121 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "home": "Home",
+    "back": "Back",
+    "language": "Language",
+    "notAvailable": "—"
+  },
+  "meta": {
+    "appTitle": "AI SDR Agent",
+    "appDescription": "Cold outreach automation admin panel"
+  },
+  "campaign": {
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused"
+    }
+  },
+  "lead": {
+    "status": {
+      "new": "New",
+      "contacted": "Contacted",
+      "replied": "Replied",
+      "interested": "Interested",
+      "rejected": "Rejected"
+    }
+  },
+  "login": {
+    "title": "AI SDR Agent",
+    "subtitle": "Sign in to your single-tenant admin panel.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "errorInvalid": "Invalid email or password",
+    "errorNetwork": "Could not reach the server. Check the API and network.",
+    "invalidLink": "Invalid link."
+  },
+  "homePage": {
+    "loading": "Loading…"
+  },
+  "dashboard": {
+    "brand": "AI SDR",
+    "logout": "Log out",
+    "nav": {
+      "overview": "Overview",
+      "campaigns": "Campaigns"
+    },
+    "overview": {
+      "title": "Overview",
+      "subtitle": "Dashboard shell. Campaigns and leads appear here in later phases.",
+      "statusCardTitle": "Status",
+      "statusCardBody": "JWT is stored in the browser; API requests use the prefix from NEXT_PUBLIC_API_URL."
+    }
+  },
+  "campaigns": {
+    "title": "Campaigns",
+    "subtitle": "Prompts and rules for outreach to leads.",
+    "newCampaign": "New campaign",
+    "listTitle": "List",
+    "listDescription": "Open a campaign to edit settings and upload a CSV of leads.",
+    "tableName": "Name",
+    "tableStatus": "Status",
+    "tableOpen": "Open",
+    "empty": "No campaigns yet. Create the first one.",
+    "loadError": "Failed to load"
+  },
+  "campaignNew": {
+    "backToList": "← Back to campaigns",
+    "title": "New campaign",
+    "cardTitle": "Parameters",
+    "cardDescription": "System prompt and rules for the first email and follow-ups.",
+    "name": "Name",
+    "status": "Status",
+    "systemPrompt": "System prompt",
+    "firstEmailRules": "First email rules",
+    "followUpRules": "Follow-up rules",
+    "saveCreate": "Create",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "saveError": "Could not save"
+  },
+  "campaignDetail": {
+    "backToList": "← Back to campaigns",
+    "editTitle": "Edit",
+    "editDescription": "Prompts and campaign status affect future email generation.",
+    "name": "Name",
+    "status": "Status",
+    "systemPrompt": "System prompt",
+    "firstEmailRules": "First email rules",
+    "followUpRules": "Follow-up rules",
+    "saveChanges": "Save changes",
+    "saving": "Saving…",
+    "deleteCampaign": "Delete campaign",
+    "csvTitle": "Import leads from CSV",
+    "csvDescription": "Columns: email (required); optional first_name / company / pain_point and synonyms (see API). Separator: comma or semicolon.",
+    "chooseCsv": "Choose CSV",
+    "importing": "Importing…",
+    "importSummary": "Import: created {created}, skipped (duplicates, etc.) {skipped}. Parse errors: {errors}.",
+    "importError": "Import failed",
+    "loadError": "Failed to load",
+    "saveError": "Could not save",
+    "updateError": "Could not update",
+    "deleteLeadError": "Could not delete",
+    "deleteCampaignError": "Could not delete campaign",
+    "leadsTitle": "Leads",
+    "leadsDescription": "Email is globally unique in this instance; duplicates on import are skipped.",
+    "leadsEmpty": "No leads yet. Upload a CSV above.",
+    "tableEmail": "Email",
+    "tableNameCol": "Name",
+    "tableCompany": "Company",
+    "tablePain": "Pain",
+    "tableStatus": "Status",
+    "deleteLeadAria": "Delete lead",
+    "confirmDeleteLead": "Delete this lead?",
+    "confirmDeleteCampaign": "Delete this campaign and all related leads? This cannot be undone.",
+    "notFound": "Campaign not found.",
+    "invalidLink": "Invalid link."
+  }
+}

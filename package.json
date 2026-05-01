@@ -1,0 +1,16 @@
+{
+  "name": "ai-sdr-project",
+  "private": true,
+  "description": "Оркестрация локальной разработки: PostgreSQL, FastAPI, Next.js",
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "dev:api": "cd backend && ./.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:web": "npm run dev --prefix frontend",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f db"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
