@@ -1,0 +1,5 @@
+# Автотесты (pytest из корня репозитория; PYTHONPATH=backend через pytest.ini)
+pytest>=8.0
+pytest-asyncio>=0.24
+pytest-mock>=3.14
+aiosqlite>=0.20

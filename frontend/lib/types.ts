@@ -23,6 +23,7 @@ export interface Lead {
   first_name: string | null;
   company_name: string | null;
   pain_point: string | null;
+  source?: string | null;
   status: LeadStatus;
   created_at: string;
 }

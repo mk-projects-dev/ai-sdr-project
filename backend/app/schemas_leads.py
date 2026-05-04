@@ -32,6 +32,7 @@ class LeadRead(BaseModel):
     first_name: Optional[str]
     company_name: Optional[str]
     pain_point: Optional[str]
+    source: Optional[str] = None
     status: LeadStatus
     created_at: datetime
 

@@ -20,6 +20,7 @@ Single-tenant B2B-приложение для холодного аутрича:
    python3 -m venv .venv
    source .venv/bin/activate   # Windows: .venv\Scripts\activate
    pip install -r requirements.txt
+   playwright install chromium   # для POST /api/parser/run (Google Maps)
    cp ../.env.example .env     # при необходимости; заполнить секреты
    ```
 4. **Frontend** — `cd frontend && npm install`, при необходимости `cp .env.example .env.local`.
@@ -54,6 +55,11 @@ Single-tenant B2B-приложение для холодного аутрича:
 3. **Кампании и лиды** — CRUD `/api/campaigns`, `/api/leads`, импорт CSV, UI в `/dashboard/campaigns`; **локализация** UI — `frontend/messages/en.json` и `ru.json` (по умолчанию **английский**), переключатель в шапке/сайдбаре, выбор языка в `localStorage` (`aisdr_locale`). Если для русского нет ключа, показывается английский текст; при включённом онлайн-режиме (не `NEXT_PUBLIC_REMOTE_I18N=false`) отсутствующие фразы можно доперевести через бесплатный API MyMemory с кэшем в `sessionStorage`. Пока идёт первая загрузка данных, редирект с логина / домашней страницы или сохранение/импорт на карточке кампании, поверх UI показывается полноэкранный лоадер (`PageLoader`), чтобы не взаимодействовать с неполным состоянием.
 4. **Исходящие** — фоновый воркер: лиды `new` + кампания `active` → Claude → SMTP → `EmailInteraction` outbound, статус лида `contacted`.
 5. **Входящие** — фоновый IMAP-воркер: непрочитанные письма → по адресу отправителя ищется лид → Claude классифицирует ответ (`interested` / `replied` / `rejected`) → запись `EmailInteraction` inbound и обновление статуса лида; дедупликация по `Message-ID` в таблице `imap_processed_messages`.
+6. **Парсер Google Maps** — `POST /api/parser/run` (JWT): тело `{ "campaign_id", "location", "keyword", "limit" }`. Сразу отвечает `{"status":"started"}`; в фоне Playwright открывает Google Maps, собирает карточки компаний, для каждой вызывает Claude для поля `pain_point`, пытается вытащить email с сайта (httpx + BeautifulSoup), сохраняет лид с `source="parser"` и статусом `new`. Лиды без найденного email пропускаются. Нужны установленные браузеры Playwright (`playwright install chromium`) и по возможности `ANTHROPIC_API_KEY` (иначе используется запасной текст боли).
+
+Если база уже создана до появления колонки `leads.source`, выполните в Postgres:  
+`ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(64);`  
+`CREATE INDEX IF NOT EXISTS ix_leads_source ON leads (source);`
 
 ## Фоновые процессы
 
@@ -63,6 +69,31 @@ Single-tenant B2B-приложение для холодного аутрича:
 - **imap** (`app/worker/imap_worker.py`) — опрос IMAP с интервалом `IMAP_POLL_INTERVAL_SECONDS`.
 
 Если не заданы `ANTHROPIC_API_KEY`, `IMAP_*` или SMTP (в зависимости от режима), соответствующие шаги корректно пропускаются или воркер ждёт (см. логи).
+
+## Автотесты (pytest)
+
+Команды с путями `backend/requirements.txt` и `requirements-dev.txt` нужно выполнять из **корня репозитория** (там же лежат `pytest.ini` и папка `tests/`). Если вы находитесь в `backend/`, используйте `pip install -r requirements.txt` без префикса `backend/`.
+
+Скрипт из любого места (переходит в корень сам):
+
+```bash
+bash scripts/run-tests.sh
+```
+
+Вручную из корня:
+
+```bash
+cd /path/to/ai-sdr-project
+python3 -m pip install -r backend/requirements.txt
+python3 -m pip install -r requirements-dev.txt
+python3 -m pytest
+```
+
+Если **`collected 0 items`**, проверьте, что вы в каталоге с `pytest.ini` и что папка `tests/` не пустая.
+
+Если парсер Maps пишет **`Executable doesn't exist`** для Chromium: один раз в каталоге `backend` с venv выполните **`python -m playwright install chromium`** (лучше вне sandbox IDE). Если в логе путь содержит **`cursor-sandbox-cache`**, приложение при запуске парсера **сбрасывает** `PLAYWRIGHT_BROWSERS_PATH` и ищет Chromium в стандартном кеше пользователя; при необходимости вручную: **`unset PLAYWRIGHT_BROWSERS_PATH`** и перезапуск API.
+
+Тесты используют in-memory **SQLite** (`sqlite+aiosqlite:///:memory:`), мокают **Anthropic**, **SMTP** и фоновый **парсер**; фоновые воркеры outreach/IMAP в тестовом приложении **не** стартуют (`app.application.create_app`).
 
 ## Документация API
 
