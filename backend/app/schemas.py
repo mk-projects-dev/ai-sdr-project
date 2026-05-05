@@ -18,3 +18,9 @@ class TokenResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     admin_id: UUID
+
+
+class BillingSummaryResponse(BaseModel):
+    total_cost: float
+    total_input_tokens: int
+    total_output_tokens: int

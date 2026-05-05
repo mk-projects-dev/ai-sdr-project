@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
-from anthropic import AsyncAnthropic
+import litellm
 
 from app.config import Settings
 from app.models import Lead, LeadStatus
 from app.services.json_text import parse_json_object_from_text
+from app.services.litellm_helpers import (
+    anthropic_litellm_model_id,
+    completion_cost_safe,
+    completion_text_first_choice,
+    usage_tokens_from_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +32,15 @@ apply them when deciding lead_status and what to write in "note" (next-step hint
 """
 
 
+@dataclass(frozen=True)
+class InboundClassifyResult:
+    lead_status: LeadStatus
+    note: str
+    input_tokens: int
+    output_tokens: int
+    cost: float
+
+
 async def classify_inbound_reply(
     *,
     settings: Settings,
@@ -33,11 +49,9 @@ async def classify_inbound_reply(
     body: str,
     follow_up_rules: Optional[str] = None,
     thread_context: Optional[str] = None,
-) -> tuple[LeadStatus, str]:
+) -> InboundClassifyResult:
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not configured")
-
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     system = _CLASSIFIER_SYSTEM_BASE
     if follow_up_rules and follow_up_rules.strip():
@@ -63,18 +77,18 @@ async def classify_inbound_reply(
     )
     user_block = "".join(user_chunks)
 
-    message = await client.messages.create(
-        model=settings.anthropic_model,
+    model = anthropic_litellm_model_id(settings.anthropic_model)
+    response = await litellm.acompletion(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_block},
+        ],
         max_tokens=1024,
-        system=system,
-        messages=[{"role": "user", "content": user_block}],
+        api_key=settings.anthropic_api_key,
     )
 
-    text_parts: list[str] = []
-    for block in message.content:
-        if hasattr(block, "text"):
-            text_parts.append(block.text)
-    combined = "".join(text_parts).strip()
+    combined = completion_text_first_choice(response)
     if not combined:
         raise RuntimeError("Empty classifier response")
 
@@ -95,4 +109,13 @@ async def classify_inbound_reply(
     if not note:
         note = raw_status or "inbound_classified"
 
-    return status, note
+    in_tok, out_tok = usage_tokens_from_response(response)
+    cost = completion_cost_safe(response)
+
+    return InboundClassifyResult(
+        lead_status=status,
+        note=note,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        cost=cost,
+    )

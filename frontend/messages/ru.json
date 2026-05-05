@@ -64,6 +64,10 @@
       "leads": "Контакты"
     }
   },
+  "billingCost": "Затраты на ИИ (всего)",
+  "inputTokens": "Входящие токены",
+  "outputTokens": "Исходящие токены",
+  "billingHoverDetail": "{inputLabel}: {inputVal} | {outputLabel}: {outputVal}",
   "leadsPage": {
     "title": "База контактов",
     "subtitle": "Добавляйте лидов через CSV или парсер Maps, затем назначайте их кампаниям для рассылки.",

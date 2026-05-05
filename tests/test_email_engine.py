@@ -8,6 +8,8 @@ from app.auth import hash_password
 from app.config import get_settings
 from app.database import async_session_factory
 from app.models import Campaign, CampaignStatus, Lead, LeadStatus
+from app.models import EmailDirection, EmailInteraction
+from app.services.email_ai import FirstOutreachEmailResult
 from app.worker.outreach_worker import process_outreach_once
 
 
@@ -16,10 +18,20 @@ async def test_outreach_pipeline_updates_lead_and_sends_once(mocker: pytest.Mock
     gen = mocker.patch(
         "app.worker.outreach_worker.generate_first_outreach_email",
         new_callable=AsyncMock,
-        return_value=("Hello subject", "Hello body"),
+        return_value=FirstOutreachEmailResult(
+            subject="Hello subject",
+            body="Hello body",
+            input_tokens=10,
+            output_tokens=20,
+            cost=0.00033,
+        ),
     )
     send = mocker.patch(
         "app.worker.outreach_worker.send_outreach_email",
+        new_callable=AsyncMock,
+    )
+    sleeper = mocker.patch(
+        "app.worker.outreach_worker.asyncio.sleep",
         new_callable=AsyncMock,
     )
 
@@ -56,6 +68,7 @@ async def test_outreach_pipeline_updates_lead_and_sends_once(mocker: pytest.Mock
 
     gen.assert_awaited_once()
     send.assert_awaited_once()
+    sleeper.assert_awaited_once()
 
     async with async_session_factory() as s:
         from sqlalchemy import select
@@ -63,3 +76,14 @@ async def test_outreach_pipeline_updates_lead_and_sends_once(mocker: pytest.Mock
         r = await s.execute(select(Lead).where(Lead.email == "lead@test.dev"))
         updated = r.scalar_one()
         assert updated.status == LeadStatus.contacted
+
+        ir = await s.execute(
+            select(EmailInteraction).where(
+                EmailInteraction.lead_id == updated.id,
+                EmailInteraction.direction == EmailDirection.outbound,
+            )
+        )
+        ix = ir.scalar_one()
+        assert ix.input_tokens == 10
+        assert ix.output_tokens == 20
+        assert ix.cost == 0.00033

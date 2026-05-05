@@ -64,5 +64,8 @@ class EmailInteractionRead(BaseModel):
     body: str
     ai_intent: Optional[str] = None
     sent_at: datetime
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost: float = 0.0
 
     model_config = {"from_attributes": True}

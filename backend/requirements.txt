@@ -8,6 +8,7 @@ python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.1,<5
 python-multipart>=0.0.17
 anthropic>=0.45.0
+litellm>=1.59.0
 aiosmtplib>=3.0.0
 playwright>=1.49.0
 beautifulsoup4>=4.12.3

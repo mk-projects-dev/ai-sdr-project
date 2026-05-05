@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -109,6 +109,14 @@ class ImapProcessedMessage(Base):
 
 
 class EmailInteraction(Base):
+    """Переписка по лиду.
+
+    Ручная миграция PostgreSQL (если не используете патч в application lifespan):
+    ALTER TABLE email_interactions ADD COLUMN IF NOT EXISTS input_tokens INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE email_interactions ADD COLUMN IF NOT EXISTS output_tokens INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE email_interactions ADD COLUMN IF NOT EXISTS cost DOUBLE PRECISION NOT NULL DEFAULT 0;
+    """
+
     __tablename__ = "email_interactions"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
@@ -125,5 +133,8 @@ class EmailInteraction(Base):
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     lead: Mapped["Lead"] = relationship("Lead", back_populates="email_interactions")

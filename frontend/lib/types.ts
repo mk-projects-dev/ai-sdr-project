@@ -42,6 +42,9 @@ export interface EmailInteraction {
   body: string;
   ai_intent: string | null;
   sent_at: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  cost?: number;
 }
 
 export interface LeadImportResult {

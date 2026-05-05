@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLayoutEffect, useState } from "react";
 import { LogOut, Megaphone, Users } from "lucide-react";
 
+import { BillingWidget } from "@/components/billing-widget";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,7 @@ export default function DashboardLayout({
           })}
         </nav>
         <div className="border-t border-sidebar-border p-3 space-y-2">
+          <BillingWidget />
           <LocaleSwitcher className="justify-center" />
           <Button
             variant="ghost"

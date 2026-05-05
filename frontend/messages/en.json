@@ -64,6 +64,10 @@
       "leads": "Contacts"
     }
   },
+  "billingCost": "AI usage (total)",
+  "inputTokens": "Input tokens",
+  "outputTokens": "Output tokens",
+  "billingHoverDetail": "{inputLabel}: {inputVal} | {outputLabel}: {outputVal}",
   "leadsPage": {
     "title": "Contact database",
     "subtitle": "Add leads via CSV or the Maps parser, then assign them to campaigns for outreach.",

@@ -106,8 +106,11 @@ async def process_outreach_once() -> bool:
 
         subject: str | None = None
         body: str | None = None
+        input_tokens = 0
+        output_tokens = 0
+        cost = 0.0
         try:
-            subject, body = await generate_first_outreach_email(
+            gen = await generate_first_outreach_email(
                 settings=settings,
                 system_prompt=system_prompt,
                 first_email_rules=first_rules,
@@ -115,6 +118,11 @@ async def process_outreach_once() -> bool:
                 lead_company_name=lead_company_name,
                 lead_pain_point=lead_pain_point,
             )
+            subject = gen.subject
+            body = gen.body
+            input_tokens = gen.input_tokens
+            output_tokens = gen.output_tokens
+            cost = gen.cost
             await send_outreach_email(
                 settings=settings,
                 to_email=lead_email,
@@ -145,6 +153,9 @@ async def process_outreach_once() -> bool:
                         subject=subject,
                         body=body,
                         ai_intent="first_outreach",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost=cost,
                     )
                 )
 

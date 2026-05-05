@@ -71,7 +71,7 @@ async def _process_one_inbound(m: RawImapMessage, settings: Settings) -> None:
         return
 
     try:
-        new_status, intent_note = await classify_inbound_reply(
+        classified = await classify_inbound_reply(
             settings=settings,
             lead=lead,
             subject=m.subject,
@@ -95,14 +95,17 @@ async def _process_one_inbound(m: RawImapMessage, settings: Settings) -> None:
             fresh = await session.get(Lead, lead.id)
             if fresh is None:
                 return
-            fresh.status = new_status
+            fresh.status = classified.lead_status
             session.add(
                 EmailInteraction(
                     lead_id=lead.id,
                     direction=EmailDirection.inbound,
                     subject=m.subject[:1024],
                     body=(m.body_text or "(empty)")[:],
-                    ai_intent=intent_note[:512],
+                    ai_intent=classified.note[:512],
+                    input_tokens=classified.input_tokens,
+                    output_tokens=classified.output_tokens,
+                    cost=classified.cost,
                 )
             )
             session.add(
@@ -113,7 +116,7 @@ async def _process_one_inbound(m: RawImapMessage, settings: Settings) -> None:
     logger.info(
         "IMAP: processed inbound from %s -> status=%s",
         m.from_email,
-        new_status.value,
+        classified.lead_status.value,
     )
 
 

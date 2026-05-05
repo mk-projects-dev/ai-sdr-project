@@ -12,7 +12,7 @@ from app import models  # noqa: F401 — register ORM metadata
 from app.bootstrap import ensure_initial_admin
 from app.config import get_settings
 from app.database import Base, engine
-from app.routers import auth, campaigns, health, leads, parser
+from app.routers import auth, billing, campaigns, health, leads, parser
 from app.worker.imap_worker import imap_reply_worker_loop
 from app.worker.outreach_worker import outreach_worker_loop
 
@@ -84,6 +84,62 @@ async def _ensure_campaign_send_throttle_columns(conn) -> None:
         await conn.run_sync(_add_sqlite_columns)
 
 
+async def _ensure_email_interaction_usage_columns(conn) -> None:
+    """LiteLLM billing: токены и cost на строке переписки."""
+
+    dialect = conn.engine.dialect.name
+    if dialect == "postgresql":
+        await conn.execute(
+            text(
+                "ALTER TABLE email_interactions ADD COLUMN IF NOT EXISTS "
+                "input_tokens INTEGER NOT NULL DEFAULT 0"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE email_interactions ADD COLUMN IF NOT EXISTS "
+                "output_tokens INTEGER NOT NULL DEFAULT 0"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE email_interactions ADD COLUMN IF NOT EXISTS "
+                "cost DOUBLE PRECISION NOT NULL DEFAULT 0"
+            )
+        )
+        return
+    if dialect == "sqlite":
+
+        def _add_sqlite_columns(sync_conn) -> None:
+            from sqlalchemy import inspect
+
+            insp = inspect(sync_conn)
+            cols = {c["name"] for c in insp.get_columns("email_interactions")}
+            if "input_tokens" not in cols:
+                sync_conn.execute(
+                    text(
+                        "ALTER TABLE email_interactions ADD COLUMN input_tokens "
+                        "INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+            if "output_tokens" not in cols:
+                sync_conn.execute(
+                    text(
+                        "ALTER TABLE email_interactions ADD COLUMN output_tokens "
+                        "INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+            if "cost" not in cols:
+                sync_conn.execute(
+                    text(
+                        "ALTER TABLE email_interactions ADD COLUMN cost "
+                        "REAL NOT NULL DEFAULT 0"
+                    )
+                )
+
+        await conn.run_sync(_add_sqlite_columns)
+
+
 async def _ensure_postgres_lead_campaign_optional(conn) -> None:
     """Лиды без кампании: campaign_id NULL, при удалении кампании — SET NULL."""
     if conn.engine.dialect.name != "postgresql":
@@ -117,6 +173,7 @@ def create_app(
             await _ensure_postgres_lead_source_column(conn)
             await _ensure_postgres_lead_campaign_optional(conn)
             await _ensure_campaign_send_throttle_columns(conn)
+            await _ensure_email_interaction_usage_columns(conn)
         await ensure_initial_admin()
         outreach_task = None
         imap_task = None
@@ -154,5 +211,6 @@ def create_app(
     app.include_router(campaigns.router, prefix="/api")
     app.include_router(leads.router, prefix="/api")
     app.include_router(parser.router, prefix="/api")
+    app.include_router(billing.router, prefix="/api")
 
     return app
