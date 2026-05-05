@@ -2,6 +2,17 @@
 
 Single-tenant B2B tool for cold outreach: CSV/parser leads, **Anthropic Claude** for copy, **SMTP** outbound, **IMAP** inbound with reply classification and lead status updates.
 
+## Repository layout
+
+| Path | Contents |
+|------|-----------|
+| `backend/` | FastAPI app (`app/main.py`, `app/application.py`, `app/routers/`, `app/worker/`, `requirements.txt`). Run uvicorn from here; venv lives at `backend/.venv`. |
+| `frontend/` | Next.js 14 app (`app/`, `components/`, `messages/`). |
+| `tests/` | Pytest suite (root `pytest.ini`). |
+| `scripts/` | `dev.sh` (full stack), `run-tests.sh`, `wait-for-postgres.sh`. |
+| `docker-compose.yml` | Postgres service for local dev. |
+| `package.json` | Root scripts: `npm run dev` → `scripts/dev.sh`; `db:*` → compose helpers. Optional `Makefile` wraps the same. |
+
 ## Stack
 
 | Layer | Technologies |
@@ -13,24 +24,18 @@ Single-tenant B2B tool for cold outreach: CSV/parser leads, **Anthropic Claude**
 
 ## Quick start
 
-1. **PostgreSQL** — from repo root: `docker compose up -d db` (or your own Postgres).
-2. **Repo root** — once: `npm install` (runs frontend/backend via `npm run dev`).
-3. **Backend** — `cd backend`:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate   # Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
-   python -m playwright install chromium   # for Maps parser
-   cp ../.env.example .env && edit secrets
-   ```
-4. **Frontend** — `cd frontend && npm install`; optional `cp .env.example .env.local`.
-5. **Run** — from repo root: `npm run dev` (uses `scripts/dev.sh`: DB wait + uvicorn + Next).
+1. **PostgreSQL** — from repo root: `docker compose up -d db` or `npm run db:up` (or use your own Postgres).
+2. **Repo root** — once: `npm install` (installs root tooling such as `concurrently`; `scripts/dev.sh` will install backend venv and frontend deps when needed).
+3. **Backend env** — copy root template: `cp .env.example backend/.env` and fill secrets (or let `scripts/dev.sh` create `backend/.env` from `.env.example` on first run).
+4. **Backend Python deps & Playwright** — `scripts/dev.sh` creates `backend/.venv` and runs `pip install`; for the Maps parser run once: `backend/.venv/bin/python -m playwright install chromium`.
+5. **Frontend** — `cd frontend && npm install` if you are not using `npm run dev` from root; optional `cp .env.example .env.local`.
+6. **Run everything** — from repo root: `npm run dev` (`scripts/dev.sh`: Docker DB → wait for Postgres → uvicorn on `:8000` + Next on `:3000`).
 
-Manual: terminal 1 — uvicorn in `backend`; terminal 2 — `npm run dev` in `frontend`.
+Manual mode: terminal 1 — `cd backend && .venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`; terminal 2 — `npm run dev` in `frontend`.
 
 ## Environment variables
 
-See **`.env.example`** at the repo root. Main groups:
+See **`.env.example`** at the repo root (copied to `backend/.env` for the API). Frontend optional vars are in **`frontend/.env.example`**.
 
 | Group | Purpose |
 |--------|---------|
@@ -42,7 +47,7 @@ See **`.env.example`** at the repo root. Main groups:
 | `WORKER_*` | Outreach worker poll interval and batch size |
 | `IMAP_*` | Inbound mailbox polling |
 
-Do not commit secrets.
+Do not commit real secrets; only `.env.example` templates belong in git.
 
 ## What it does
 
@@ -52,11 +57,11 @@ Do not commit secrets.
 - **Inbound worker** — IMAP polling, match sender to lead, classify reply, update status and store inbound interaction.
 - **Maps parser** — `POST /api/parser/run` with `{ "location", "keyword", "limit" }` returns immediately; Playwright + optional Claude fills `pain_point` and scrapes emails; leads saved with `campaign_id` null and `source="parser"`.
 
-On API startup, Postgres gets lightweight DDL patches when needed (see `app/application.py`). For old DBs only: ensure `leads.source` and nullable `campaign_id` exist if you migrated manually.
+On API startup, Postgres gets lightweight DDL patches when needed (`backend/app/application.py`). For old DBs migrated manually, ensure `leads.source` and nullable `campaign_id` exist.
 
 ## Background workers
 
-Started with FastAPI: **outreach** (`app/worker/outreach_worker.py`) and **imap** (`app/worker/imap_worker.py`). If keys or SMTP/IMAP are missing, workers idle or skip steps — check logs.
+Started with FastAPI: **outreach** (`backend/app/worker/outreach_worker.py`) and **imap** (`backend/app/worker/imap_worker.py`). If keys or SMTP/IMAP are missing, workers idle or skip steps — check logs.
 
 ## Tests
 
@@ -78,4 +83,4 @@ Swagger: `http://127.0.0.1:8000/docs` when the backend is running.
 
 ---
 
-When behavior or env vars change, update this file and `.env.example` (see `.cursor/rules/readme-maintenance.mdc`).
+When behavior or env vars change, update this file and `.env.example` (and `frontend/.env.example` if relevant).
