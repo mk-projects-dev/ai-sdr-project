@@ -2,6 +2,10 @@
 
 Single-tenant B2B tool for cold outreach: CSV/parser leads, **Anthropic Claude** for copy, **SMTP** outbound, **IMAP** inbound with reply classification and lead status updates.
 
+**Keys:** bring **your own** API keys and mail credentials (see `.env.example`). Never commit real secrets to git.
+
+**Use & responsibility.** This tool helps you **draft and send** outreach email; it is **not legal or compliance advice**. **Commercial email and prospecting are regulated** in many jurisdictions (consent, opt-out, identification of sender, etc.). **You** choose lists, copy, and SMTP accounts — **you are responsible** for lawful use and for damages arising from misuse. The authors and contributors are **not liable** for deliverability, spam classification, or regulatory outcomes.
+
 ## Repository layout
 
 | Path | Contents |
@@ -11,6 +15,7 @@ Single-tenant B2B tool for cold outreach: CSV/parser leads, **Anthropic Claude**
 | `tests/` | Pytest suite (root `pytest.ini`). |
 | `scripts/` | `dev.sh` (full stack), `run-tests.sh`, `wait-for-postgres.sh`. |
 | `docker-compose.yml` | Postgres service for local dev. |
+| `LICENSE` | MIT (see **License** below). |
 | `package.json` | Root scripts: `npm run dev` → `scripts/dev.sh`; `db:*` → compose helpers. Optional `Makefile` wraps the same. |
 
 ## Stack
@@ -83,4 +88,46 @@ Swagger: `http://127.0.0.1:8000/docs` when the backend is running.
 
 ---
 
-When behavior or env vars change, update this file and `.env.example` (and `frontend/.env.example` if relevant).
+## Documentation habit (contributors & AI assistants)
+
+After **substantial** changes (new behavior, env vars, workers, endpoints, or UI flows), update **`README.md`** and, when needed, **`.env.example`** and **`frontend/.env.example`**.
+
+---
+
+## Code health (honest snapshot)
+
+**Strengths:** clear split **FastAPI backend / Next.js frontend**, async SQLAlchemy, background workers for outbound and inbound mail, pytest with **in-memory SQLite** and mocks (no real SMTP/IMAP/Anthropic in unit paths), Docker Postgres for local dev, EN/RU UI via JSON messages.
+
+**Watch-outs (ideas for improvement, not blockers):**
+
+- Outreach picks **one global FIFO** of `new` leads across active campaigns — fair **round-robin per campaign** or explicit queues could reduce starvation.
+- **RBAC / multi-tenant** beyond a single admin JWT are out of scope today.
+- **Observability** could grow (structured logs, metrics, dead-letter for failed sends).
+- Parser + Playwright path is **environment-sensitive** (browser install, Maps DOM changes).
+- Inbound matching is primarily **by sender email**; alias/thread edge cases may need tuning.
+
+---
+
+## License
+
+This project is **open source** and released under the **[MIT License](LICENSE)**.
+
+The stack builds on **free / open-source** components (Python, FastAPI, Next.js, SQLAlchemy, and others — see `backend/requirements.txt` and `frontend/package.json`). **Anthropic**, **SMTP**, and **IMAP** providers are **third-party services**: you supply keys and credentials; **usage and billing are between you and each provider** under their terms. **No production secrets are shipped** in this repository.
+
+**Tooling:** parts of the codebase were drafted or refactored with **[Cursor](https://cursor.com)** (AI-assisted editing). That does not change licensing: this repo stays MIT; upstream libraries remain under their own licenses.
+
+---
+
+## Say thanks (optional)
+
+If the project saved you time, tips are welcome on **TRC20** (e.g. USDT on Tron). Copy the address from the block below — on **github.com**, hover the code block and use the **copy** icon to avoid typos.
+
+```
+TD2q5quUqLDqM3oCzHuWt1ZCjRvkE72KrB
+```
+
+---
+
+## Ideas & custom work
+
+Improvements, integrations, or adapting the stack to your workflow — same contact style as [finance_analyzer](https://github.com/mk-projects-dev/finance_analyzer): **[Telegram @fogored](https://t.me/fogored)** or **[mark77793@gmail.com](mailto:mark77793@gmail.com)** — describe what you need.
