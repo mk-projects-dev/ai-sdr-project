@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 
 import aiosmtplib
 
@@ -33,6 +34,13 @@ async def send_outreach_email(
         raise RuntimeError("SMTP_HOST and SMTP_FROM_EMAIL must be set for real sends")
 
     msg = EmailMessage()
+    msg_domain = (
+        settings.smtp_from_email.split("@")[-1]
+        if settings.smtp_from_email and "@" in settings.smtp_from_email
+        else "localhost"
+    )
+    msg["Message-ID"] = make_msgid(domain=msg_domain)
+    msg["Date"] = formatdate(localtime=True)
     msg["Subject"] = subject
     msg["From"] = settings.smtp_from_email
     msg["To"] = to_email

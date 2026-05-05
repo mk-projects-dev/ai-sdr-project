@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { Loader2, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
 import { PageLoader } from "@/components/page-loader";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -105,20 +105,22 @@ export default function CampaignsPage() {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
             {t("campaigns.title")}
           </h1>
           <p className="mt-1 text-muted-foreground">{t("campaigns.subtitle")}</p>
         </div>
-        <Link
-          href="/dashboard/campaigns/new"
-          className={cn(buttonVariants())}
-        >
-          <Plus className="mr-2 size-4" />
-          {t("campaigns.newCampaign")}
-        </Link>
+        <div className="flex flex-shrink-0 flex-wrap gap-2">
+          <Link
+            href="/dashboard/campaigns/new"
+            className={cn(buttonVariants())}
+          >
+            <Plus className="mr-2 size-4" />
+            {t("campaigns.newCampaign")}
+          </Link>
+        </div>
       </div>
 
       {error ? (
@@ -204,10 +206,12 @@ export default function CampaignsPage() {
                           <Link
                             href={`/dashboard/campaigns/${c.id}`}
                             className={cn(
-                              buttonVariants({ variant: "outline", size: "sm" })
+                              buttonVariants({ variant: "outline", size: "icon-sm" })
                             )}
+                            aria-label={t("campaigns.editAria")}
+                            title={t("campaigns.editAria")}
                           >
-                            {t("campaigns.tableOpen")}
+                            <Pencil className="size-4" aria-hidden />
                           </Link>
                           <Button
                             type="button"

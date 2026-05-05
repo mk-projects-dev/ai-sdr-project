@@ -28,6 +28,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, apiJson } from "@/lib/api-client";
+import {
+  parseBoundedInt,
+  sanitizeUnsignedDigits,
+} from "@/lib/parse-bounded-int";
 import { useTranslations } from "@/lib/i18n/locale-provider";
 import type {
   Campaign,
@@ -76,9 +80,14 @@ export default function CampaignDetailPage() {
   const [firstRules, setFirstRules] = useState("");
   const [followRules, setFollowRules] = useState("");
   const [status, setStatus] = useState<CampaignStatus>("draft");
-  const [maxEmailsPerDay, setMaxEmailsPerDay] = useState(50);
-  const [delayMinMinutes, setDelayMinMinutes] = useState(5);
-  const [delayMaxMinutes, setDelayMaxMinutes] = useState(20);
+  const [maxEmailsDraft, setMaxEmailsDraft] = useState("");
+  const [delayMinDraft, setDelayMinDraft] = useState("");
+  const [delayMaxDraft, setDelayMaxDraft] = useState("");
+  const [throttleErrors, setThrottleErrors] = useState<{
+    maxEmails?: string;
+    delayMin?: string;
+    delayMax?: string;
+  }>({});
 
   const loadAll = useCallback(async () => {
     const ctrl = new AbortController();
@@ -94,21 +103,26 @@ export default function CampaignDetailPage() {
       setFirstRules(c.first_email_rules);
       setFollowRules(c.follow_up_rules);
       setStatus(c.status);
-      setMaxEmailsPerDay(
-        Math.min(2000, Math.max(1, Math.floor(c.max_emails_per_day ?? 50)))
+      setMaxEmailsDraft(
+        String(Math.min(2000, Math.max(1, Math.floor(c.max_emails_per_day ?? 50))))
       );
-      setDelayMinMinutes(
-        Math.min(
-          1440,
-          Math.max(1, Math.round((c.send_delay_min_seconds ?? 300) / 60))
-        )
+      setDelayMinDraft(
+        String(
+          Math.min(
+            1440,
+            Math.max(1, Math.round((c.send_delay_min_seconds ?? 300) / 60)),
+          ),
+        ),
       );
-      setDelayMaxMinutes(
-        Math.min(
-          1440,
-          Math.max(1, Math.round((c.send_delay_max_seconds ?? 1200) / 60))
-        )
+      setDelayMaxDraft(
+        String(
+          Math.min(
+            1440,
+            Math.max(1, Math.round((c.send_delay_max_seconds ?? 1200) / 60)),
+          ),
+        ),
       );
+      setThrottleErrors({});
       setLeads(ls);
     } finally {
       window.clearTimeout(timeoutId);
@@ -150,9 +164,23 @@ export default function CampaignDetailPage() {
   async function onSaveCampaign(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const maxDay = Math.min(2000, Math.max(1, Math.floor(maxEmailsPerDay)));
-    const mn = Math.min(1440, Math.max(1, Math.floor(delayMinMinutes)));
-    const mx = Math.min(1440, Math.max(1, Math.floor(delayMaxMinutes)));
+    const maxDay = parseBoundedInt(maxEmailsDraft, 1, 2000);
+    const mn = parseBoundedInt(delayMinDraft, 1, 1440);
+    const mx = parseBoundedInt(delayMaxDraft, 1, 1440);
+    if (maxDay === null || mn === null || mx === null) {
+      setThrottleErrors({
+        maxEmails:
+          maxDay === null
+            ? t("common.numericThrottleDailyCapInvalid")
+            : undefined,
+        delayMin:
+          mn === null ? t("common.numericThrottleDelayMinInvalid") : undefined,
+        delayMax:
+          mx === null ? t("common.numericThrottleDelayMaxInvalid") : undefined,
+      });
+      return;
+    }
+    setThrottleErrors({});
     if (mn > mx) {
       setError(t("campaignDetail.delayOrderError"));
       return;
@@ -206,18 +234,6 @@ export default function CampaignDetailPage() {
       setLeads((prev) => prev.filter((l) => l.id !== leadId));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("campaignDetail.deleteLeadError"));
-    }
-  }
-
-  async function removeCampaign() {
-    if (!confirm(t("campaignDetail.confirmDeleteCampaign"))) return;
-    setError(null);
-    try {
-      await apiJson(`/api/campaigns/${id}`, { method: "DELETE" });
-      router.push("/dashboard/campaigns");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("campaignDetail.deleteCampaignError"));
     }
   }
 
@@ -305,6 +321,9 @@ export default function CampaignDetailPage() {
             <p className="text-xs text-muted-foreground">
               {t("campaignDetail.throttleIntro")}
             </p>
+            <p className="text-xs text-muted-foreground">
+              {t("common.numericThrottleInputHint")}
+            </p>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-2">
                 <Label htmlFor="max_emails_per_day">
@@ -312,14 +331,25 @@ export default function CampaignDetailPage() {
                 </Label>
                 <Input
                   id="max_emails_per_day"
-                  type="number"
-                  min={1}
-                  max={2000}
-                  required
-                  value={maxEmailsPerDay}
-                  onChange={(ev) => setMaxEmailsPerDay(Number(ev.target.value))}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  aria-invalid={Boolean(throttleErrors.maxEmails)}
+                  value={maxEmailsDraft}
+                  onChange={(ev) => {
+                    setMaxEmailsDraft(sanitizeUnsignedDigits(ev.target.value));
+                    setThrottleErrors((prev) => ({
+                      ...prev,
+                      maxEmails: undefined,
+                    }));
+                  }}
                   disabled={saving}
                 />
+                {throttleErrors.maxEmails ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {throttleErrors.maxEmails}
+                  </p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="delay_min_minutes">
@@ -327,16 +357,25 @@ export default function CampaignDetailPage() {
                 </Label>
                 <Input
                   id="delay_min_minutes"
-                  type="number"
-                  min={1}
-                  max={1440}
-                  required
-                  value={delayMinMinutes}
-                  onChange={(ev) =>
-                    setDelayMinMinutes(Number(ev.target.value))
-                  }
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  aria-invalid={Boolean(throttleErrors.delayMin)}
+                  value={delayMinDraft}
+                  onChange={(ev) => {
+                    setDelayMinDraft(sanitizeUnsignedDigits(ev.target.value));
+                    setThrottleErrors((prev) => ({
+                      ...prev,
+                      delayMin: undefined,
+                    }));
+                  }}
                   disabled={saving}
                 />
+                {throttleErrors.delayMin ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {throttleErrors.delayMin}
+                  </p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="delay_max_minutes">
@@ -344,16 +383,25 @@ export default function CampaignDetailPage() {
                 </Label>
                 <Input
                   id="delay_max_minutes"
-                  type="number"
-                  min={1}
-                  max={1440}
-                  required
-                  value={delayMaxMinutes}
-                  onChange={(ev) =>
-                    setDelayMaxMinutes(Number(ev.target.value))
-                  }
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  aria-invalid={Boolean(throttleErrors.delayMax)}
+                  value={delayMaxDraft}
+                  onChange={(ev) => {
+                    setDelayMaxDraft(sanitizeUnsignedDigits(ev.target.value));
+                    setThrottleErrors((prev) => ({
+                      ...prev,
+                      delayMax: undefined,
+                    }));
+                  }}
                   disabled={saving}
                 />
+                {throttleErrors.delayMax ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    {throttleErrors.delayMax}
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="grid gap-2">
@@ -400,15 +448,6 @@ export default function CampaignDetailPage() {
               ) : (
                 t("campaignDetail.saveChanges")
               )}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={saving}
-              onClick={removeCampaign}
-            >
-              <Trash2 className="mr-2 size-4" />
-              {t("campaignDetail.deleteCampaign")}
             </Button>
           </CardContent>
         </Card>

@@ -520,6 +520,12 @@ export default function LeadsPoolPage() {
       setSelectedIds(new Set());
       setSelectedCampaignId("");
       await loadLeads();
+      try {
+        const campsData = await apiJson<Campaign[]>("/api/campaigns");
+        setCampaigns(campsData);
+      } catch {
+        /* статусы кампаний вторичны после успешного assign */
+      }
       setImportMessage(t("leadsPage.assignSuccess", { count: assignedCount }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("leadsPage.assignError"));
@@ -550,7 +556,6 @@ export default function LeadsPoolPage() {
           </div>
           <Button
             type="button"
-            variant="outline"
             size="sm"
             onClick={() => {
               setParserPolling(false);
@@ -568,22 +573,20 @@ export default function LeadsPoolPage() {
           </h1>
           <p className="mt-1 text-muted-foreground">{t("leadsPage.subtitle")}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-shrink-0 flex-wrap gap-2">
           <Button
             type="button"
-            variant="outline"
             onClick={downloadLeadsImportTemplateCsv}
           >
             <FileDown className="mr-2 size-4" />
             {t("leadsPage.downloadTemplateCsv")}
           </Button>
-          <Button type="button" variant="outline" onClick={() => setCsvOpen(true)}>
+          <Button type="button" onClick={() => setCsvOpen(true)}>
             <Upload className="mr-2 size-4" />
             {t("leadsPage.uploadCsv")}
           </Button>
           <Button
             type="button"
-            variant="outline"
             disabled={parserPolling}
             onClick={() => setParserOpen(true)}
           >
@@ -785,7 +788,7 @@ export default function LeadsPoolPage() {
         <div className="flex flex-col gap-4">
           <label
             className={cn(
-              buttonVariants({ variant: "outline" }),
+              buttonVariants(),
               importing && "pointer-events-none opacity-50",
               "cursor-pointer justify-center"
             )}
@@ -875,11 +878,7 @@ export default function LeadsPoolPage() {
                 t("leadsPage.parserRunButton")
               )}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setParserOpen(false)}
-            >
+            <Button type="button" onClick={() => setParserOpen(false)}>
               {t("leadsPage.cancel")}
             </Button>
           </div>
@@ -924,11 +923,7 @@ export default function LeadsPoolPage() {
                 t("leadsPage.confirmAssign")
               )}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setAssignOpen(false)}
-            >
+            <Button type="button" onClick={() => setAssignOpen(false)}>
               {t("leadsPage.cancel")}
             </Button>
           </div>

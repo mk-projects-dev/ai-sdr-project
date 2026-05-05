@@ -11,7 +11,7 @@ from sqlalchemy.orm import joinedload
 from app.auth import get_current_admin
 from app.csv_leads import parse_csv_leads
 from app.database import get_db
-from app.models import Admin, Campaign, EmailInteraction, Lead, LeadStatus
+from app.models import Admin, Campaign, CampaignStatus, EmailInteraction, Lead, LeadStatus
 from app.schemas_leads import (
     EmailInteractionRead,
     LeadBulkAssign,
@@ -46,6 +46,15 @@ async def _get_campaign_or_404(campaign_id: UUID, db: AsyncSession) -> Campaign:
     if campaign is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return campaign
+
+
+def _pause_campaign_if_active(campaign: Campaign) -> None:
+    """Только active → paused: новые лиды не уходят в воркер, пока снова не нажмут Play.
+
+    Draft и paused не трогаем — статус кампании остаётся прежним.
+    """
+    if campaign.status == CampaignStatus.active:
+        campaign.status = CampaignStatus.paused
 
 
 async def _get_lead_or_404(lead_id: UUID, db: AsyncSession) -> Lead:
@@ -111,7 +120,7 @@ async def bulk_assign_leads(
     db: AsyncSession = Depends(get_db),
     _: Admin = Depends(get_current_admin),
 ) -> LeadBulkAssignResult:
-    await _get_campaign_or_404(body.campaign_id, db)
+    campaign = await _get_campaign_or_404(body.campaign_id, db)
     unique_ids = list(dict.fromkeys(body.lead_ids))
     result = await db.execute(
         select(Lead).where(Lead.id.in_(unique_ids)).options(joinedload(Lead.campaign))
@@ -124,8 +133,11 @@ async def bulk_assign_leads(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Leads not found: {sorted(str(i) for i in missing)}",
         )
+    attaches_new = any(lg.campaign_id != body.campaign_id for lg in leads)
     for lg in leads:
         lg.campaign_id = body.campaign_id
+    if attaches_new:
+        _pause_campaign_if_active(campaign)
     await db.commit()
     return LeadBulkAssignResult(updated=len(leads))
 
@@ -158,7 +170,8 @@ async def create_lead(
     db: AsyncSession = Depends(get_db),
     _: Admin = Depends(get_current_admin),
 ) -> LeadRead:
-    await _get_campaign_or_404(campaign_id, db)
+    campaign = await _get_campaign_or_404(campaign_id, db)
+    _pause_campaign_if_active(campaign)
     lead = Lead(
         campaign_id=campaign_id,
         email=body.email,
