@@ -126,6 +126,10 @@ If the project saved you time, tips are welcome on **TRC20** (e.g. USDT on Tron)
 TD2q5quUqLDqM3oCzHuWt1ZCjRvkE72KrB
 ```
 
+**TRC20 QR code** (same address as above — always double-check before sending):
+
+![TRC20 QR code for the address above](https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TD2q5quUqLDqM3oCzHuWt1ZCjRvkE72KrB)
+
 ---
 
 ## Ideas & custom work
