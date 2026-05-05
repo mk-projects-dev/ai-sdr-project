@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { LayoutDashboard, LogOut, Megaphone } from "lucide-react";
+import { useLayoutEffect, useState } from "react";
+import { LogOut, Megaphone, Users } from "lucide-react";
 
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { PageLoader } from "@/components/page-loader";
@@ -13,11 +13,15 @@ import { clearToken, getToken } from "@/lib/auth";
 import { useTranslations } from "@/lib/i18n/locale-provider";
 
 const navItems = [
-  { href: "/dashboard", labelKey: "dashboard.nav.overview" as const, icon: LayoutDashboard },
   {
     href: "/dashboard/campaigns",
     labelKey: "dashboard.nav.campaigns" as const,
     icon: Megaphone,
+  },
+  {
+    href: "/dashboard/leads",
+    labelKey: "dashboard.nav.leads" as const,
+    icon: Users,
   },
 ];
 
@@ -31,13 +35,13 @@ export default function DashboardLayout({
   const t = useTranslations();
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!getToken()) {
-      router.replace("/login");
+      window.location.replace("/login");
       return;
     }
     setReady(true);
-  }, [router]);
+  }, []);
 
   function handleLogout() {
     clearToken();
@@ -58,8 +62,7 @@ export default function DashboardLayout({
         <nav className="flex flex-1 flex-col gap-1 p-3">
           {navItems.map(({ href, labelKey, icon: Icon }) => {
             const active =
-              pathname === href ||
-              (href !== "/dashboard" && pathname.startsWith(`${href}/`));
+              pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
                 key={href}
@@ -101,7 +104,7 @@ export default function DashboardLayout({
             </Button>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 md:p-8">{children}</main>
+        <main className="flex-1 overflow-auto p-[20px]">{children}</main>
       </div>
     </div>
   );

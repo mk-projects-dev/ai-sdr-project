@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 from anthropic import AsyncAnthropic
 
@@ -10,7 +11,7 @@ from app.services.json_text import parse_json_object_from_text
 
 logger = logging.getLogger(__name__)
 
-_CLASSIFIER_SYSTEM = """You classify replies to B2B cold outreach emails.
+_CLASSIFIER_SYSTEM_BASE = """You classify replies to B2B cold outreach emails.
 Respond with a single JSON object only, no markdown fences:
 {"lead_status": "interested" | "replied" | "rejected", "note": "short reason"}
 
@@ -18,6 +19,9 @@ Semantics:
 - interested: clear buying intent, wants demo/call/pricing, meeting acceptance
 - rejected: unsubscribe, not interested, refusal, spam complaint
 - replied: neutral reply, question, out-of-office, ambiguous / thread continuation without clear intent
+
+Use the conversation thread (if provided) for context. If campaign-specific follow-up rules are given,
+apply them when deciding lead_status and what to write in "note" (next-step hint for humans).
 """
 
 
@@ -27,24 +31,42 @@ async def classify_inbound_reply(
     lead: Lead,
     subject: str,
     body: str,
+    follow_up_rules: Optional[str] = None,
+    thread_context: Optional[str] = None,
 ) -> tuple[LeadStatus, str]:
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not configured")
 
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-    user_block = (
-        f"Incoming reply\n"
+    system = _CLASSIFIER_SYSTEM_BASE
+    if follow_up_rules and follow_up_rules.strip():
+        system += (
+            "\n\n---\nCampaign follow-up / reply-handling rules "
+            "(interpret replies and suggested next steps accordingly):\n"
+            + follow_up_rules.strip()
+        )
+
+    user_chunks: list[str] = []
+    if thread_context and thread_context.strip():
+        user_chunks.append(
+            "Prior messages in this thread (chronological):\n"
+            + thread_context.strip()
+            + "\n\n---\n"
+        )
+    user_chunks.append(
+        "Latest incoming reply\n"
         f"Subject: {subject}\n\n"
         f"Body:\n{body or '(empty)'}\n\n"
         f"Lead email on file: {lead.email}\n"
         f"Lead company hint: {lead.company_name or '(unknown)'}\n"
     )
+    user_block = "".join(user_chunks)
 
     message = await client.messages.create(
         model=settings.anthropic_model,
         max_tokens=1024,
-        system=_CLASSIFIER_SYSTEM,
+        system=system,
         messages=[{"role": "user", "content": user_block}],
     )
 

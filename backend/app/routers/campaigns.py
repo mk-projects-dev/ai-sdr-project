@@ -45,6 +45,9 @@ async def create_campaign(
         first_email_rules=body.first_email_rules,
         follow_up_rules=body.follow_up_rules,
         status=body.status,
+        max_emails_per_day=body.max_emails_per_day,
+        send_delay_min_seconds=body.send_delay_min_seconds,
+        send_delay_max_seconds=body.send_delay_max_seconds,
     )
     db.add(campaign)
     await db.commit()

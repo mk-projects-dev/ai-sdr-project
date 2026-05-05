@@ -31,12 +31,22 @@ export default function NewCampaignPage() {
   const [firstRules, setFirstRules] = useState("");
   const [followRules, setFollowRules] = useState("");
   const [status, setStatus] = useState<CampaignStatus>("draft");
+  const [maxEmailsPerDay, setMaxEmailsPerDay] = useState(50);
+  const [delayMinMinutes, setDelayMinMinutes] = useState(5);
+  const [delayMaxMinutes, setDelayMaxMinutes] = useState(20);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const maxDay = Math.min(2000, Math.max(1, Math.floor(maxEmailsPerDay)));
+    const mn = Math.min(1440, Math.max(1, Math.floor(delayMinMinutes)));
+    const mx = Math.min(1440, Math.max(1, Math.floor(delayMaxMinutes)));
+    if (mn > mx) {
+      setError(t("campaignNew.delayOrderError"));
+      return;
+    }
     setLoading(true);
     try {
       const created = await apiJson<Campaign>("/api/campaigns", {
@@ -47,6 +57,9 @@ export default function NewCampaignPage() {
           first_email_rules: firstRules,
           follow_up_rules: followRules,
           status,
+          max_emails_per_day: maxDay,
+          send_delay_min_seconds: mn * 60,
+          send_delay_max_seconds: mx * 60,
         }),
       });
       router.push(`/dashboard/campaigns/${created.id}`);
@@ -59,7 +72,7 @@ export default function NewCampaignPage() {
   }
 
   return (
-    <div className="relative mx-auto max-w-3xl space-y-6">
+    <div className="relative w-full max-w-none space-y-6">
       {loading ? <PageLoader fullscreen /> : null}
       <div>
         <Link
@@ -105,6 +118,60 @@ export default function NewCampaignPage() {
                 <option value="active">{t("campaign.status.active")}</option>
                 <option value="paused">{t("campaign.status.paused")}</option>
               </select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("campaignNew.throttleIntro")}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="new_max_emails_per_day">
+                  {t("campaignNew.maxEmailsPerDay")}
+                </Label>
+                <Input
+                  id="new_max_emails_per_day"
+                  type="number"
+                  min={1}
+                  max={2000}
+                  required
+                  value={maxEmailsPerDay}
+                  onChange={(ev) => setMaxEmailsPerDay(Number(ev.target.value))}
+                  disabled={loading}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="new_delay_min_minutes">
+                  {t("campaignNew.delayMinMinutes")}
+                </Label>
+                <Input
+                  id="new_delay_min_minutes"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  required
+                  value={delayMinMinutes}
+                  onChange={(ev) =>
+                    setDelayMinMinutes(Number(ev.target.value))
+                  }
+                  disabled={loading}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="new_delay_max_minutes">
+                  {t("campaignNew.delayMaxMinutes")}
+                </Label>
+                <Input
+                  id="new_delay_max_minutes"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  required
+                  value={delayMaxMinutes}
+                  onChange={(ev) =>
+                    setDelayMaxMinutes(Number(ev.target.value))
+                  }
+                  disabled={loading}
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="system_prompt">{t("campaignNew.systemPrompt")}</Label>

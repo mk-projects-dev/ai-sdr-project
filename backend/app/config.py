@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     initial_admin_password: Optional[str] = None
 
     anthropic_api_key: Optional[str] = None
-    anthropic_model: str = "claude-4.6-sonnet"
+    # Messages API model id — see https://docs.anthropic.com/en/docs/about-claude/models/overview
+    anthropic_model: str = "claude-sonnet-4-6"
 
     smtp_host: Optional[str] = None
     smtp_port: int = 587

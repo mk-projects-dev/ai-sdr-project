@@ -15,7 +15,7 @@
 
 1. `admin`: id (UUID, PK), email (Unique), hashed_password. (Только для доступа к UI).
 2. `campaigns`: id (UUID, PK), name, system_prompt, first_email_rules, follow_up_rules, status (Enum: draft, active, paused).
-3. `leads`: id (UUID, PK), campaign_id (FK), email (Unique), first_name, company_name, pain_point, status (Enum: new, contacted, replied, interested, rejected), created_at.
+3. `leads`: id (UUID, PK), campaign_id (FK), email (Unique), company_name, pain_point, status (Enum: new, contacted, replied, interested, rejected), created_at.
 4. `email_interactions`: id (UUID, PK), lead_id (FK), direction (Enum: outbound, inbound), subject, body, ai_intent (String, Nullable), sent_at.
 
 ## Правила написания кода (КРИТИЧНО)

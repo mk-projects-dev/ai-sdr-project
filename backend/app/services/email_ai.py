@@ -18,7 +18,6 @@ async def generate_first_outreach_email(
     system_prompt: str,
     first_email_rules: str,
     lead_email: str,
-    lead_first_name: Optional[str],
     lead_company_name: Optional[str],
     lead_pain_point: Optional[str],
 ) -> tuple[str, str]:
@@ -31,8 +30,7 @@ async def generate_first_outreach_email(
     lead_block = (
         f"Lead:\n"
         f"- Email: {lead_email}\n"
-        f"- First name: {lead_first_name or '(unknown)'}\n"
-        f"- Company: {lead_company_name or '(unknown)'}\n"
+        f"- Company / venue name: {lead_company_name or '(unknown)'}\n"
         f"- Pain point / context: {lead_pain_point or '(not specified)'}\n"
     )
 

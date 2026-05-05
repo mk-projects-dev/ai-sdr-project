@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import joinedload
 
 from app.config import Settings, get_settings
 from app.database import async_session_factory
@@ -13,6 +14,22 @@ from app.services.reply_intent import classify_inbound_reply
 
 logger = logging.getLogger(__name__)
 
+_BODY_PREVIEW = 4000
+
+
+def _format_thread_context(interactions: list[EmailInteraction]) -> str | None:
+    if not interactions:
+        return None
+    parts: list[str] = []
+    for ix in interactions:
+        label = "OUTBOUND" if ix.direction == EmailDirection.outbound else "INBOUND"
+        body_preview = (ix.body or "")[:_BODY_PREVIEW]
+        parts.append(
+            f"[{label}] {ix.sent_at.isoformat()}\n"
+            f"Subject: {ix.subject}\n{body_preview}"
+        )
+    return "\n\n---\n\n".join(parts)
+
 
 async def _process_one_inbound(m: RawImapMessage, settings: Settings) -> None:
     async with async_session_factory() as session:
@@ -21,11 +38,25 @@ async def _process_one_inbound(m: RawImapMessage, settings: Settings) -> None:
             await asyncio.to_thread(mark_messages_seen, settings, [m.sequence_num])
             return
 
+    follow_up_rules: str | None = None
+    thread_context: str | None = None
     async with async_session_factory() as session:
         result = await session.execute(
-            select(Lead).where(func.lower(Lead.email) == m.from_email)
+            select(Lead)
+            .where(func.lower(Lead.email) == m.from_email)
+            .options(joinedload(Lead.campaign))
         )
-        lead = result.scalar_one_or_none()
+        lead = result.unique().scalar_one_or_none()
+        if lead is not None:
+            if lead.campaign is not None:
+                follow_up_rules = lead.campaign.follow_up_rules
+            hist = await session.execute(
+                select(EmailInteraction)
+                .where(EmailInteraction.lead_id == lead.id)
+                .order_by(EmailInteraction.sent_at.asc())
+                .limit(25)
+            )
+            thread_context = _format_thread_context(list(hist.scalars().all()))
 
     if lead is None:
         logger.info(
@@ -45,6 +76,8 @@ async def _process_one_inbound(m: RawImapMessage, settings: Settings) -> None:
             lead=lead,
             subject=m.subject,
             body=m.body_text,
+            follow_up_rules=follow_up_rules,
+            thread_context=thread_context,
         )
     except Exception:
         logger.exception(

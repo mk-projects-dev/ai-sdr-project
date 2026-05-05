@@ -10,8 +10,10 @@ import {
   useState,
 } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Trash2, Upload } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 
+import { LeadEmailHistoryTrigger } from "@/components/lead-email-history-dialog";
+import { LeadCompanyCell } from "@/components/lead-company-cell";
 import { PageLoader } from "@/components/page-loader";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,13 +27,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, apiFetch, apiJson } from "@/lib/api-client";
+import { ApiError, apiJson } from "@/lib/api-client";
 import { useTranslations } from "@/lib/i18n/locale-provider";
 import type {
   Campaign,
   CampaignStatus,
   Lead,
-  LeadImportResult,
   LeadStatus,
 } from "@/lib/types";
 
@@ -68,28 +69,50 @@ export default function CampaignDetailPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [firstRules, setFirstRules] = useState("");
   const [followRules, setFollowRules] = useState("");
   const [status, setStatus] = useState<CampaignStatus>("draft");
+  const [maxEmailsPerDay, setMaxEmailsPerDay] = useState(50);
+  const [delayMinMinutes, setDelayMinMinutes] = useState(5);
+  const [delayMaxMinutes, setDelayMaxMinutes] = useState(20);
 
   const loadAll = useCallback(async () => {
-    const [c, ls] = await Promise.all([
-      apiJson<Campaign>(`/api/campaigns/${id}`),
-      apiJson<Lead[]>(`/api/campaigns/${id}/leads`),
-    ]);
-    setCampaign(c);
-    setName(c.name);
-    setSystemPrompt(c.system_prompt);
-    setFirstRules(c.first_email_rules);
-    setFollowRules(c.follow_up_rules);
-    setStatus(c.status);
-    setLeads(ls);
+    const ctrl = new AbortController();
+    const timeoutId = window.setTimeout(() => ctrl.abort(), 45_000);
+    try {
+      const [c, ls] = await Promise.all([
+        apiJson<Campaign>(`/api/campaigns/${id}`, { signal: ctrl.signal }),
+        apiJson<Lead[]>(`/api/campaigns/${id}/leads`, { signal: ctrl.signal }),
+      ]);
+      setCampaign(c);
+      setName(c.name);
+      setSystemPrompt(c.system_prompt);
+      setFirstRules(c.first_email_rules);
+      setFollowRules(c.follow_up_rules);
+      setStatus(c.status);
+      setMaxEmailsPerDay(
+        Math.min(2000, Math.max(1, Math.floor(c.max_emails_per_day ?? 50)))
+      );
+      setDelayMinMinutes(
+        Math.min(
+          1440,
+          Math.max(1, Math.round((c.send_delay_min_seconds ?? 300) / 60))
+        )
+      );
+      setDelayMaxMinutes(
+        Math.min(
+          1440,
+          Math.max(1, Math.round((c.send_delay_max_seconds ?? 1200) / 60))
+        )
+      );
+      setLeads(ls);
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -103,12 +126,18 @@ export default function CampaignDetailPage() {
       try {
         await loadAll();
       } catch (e) {
-        if (!cancelled)
+        if (!cancelled) {
+          const aborted =
+            (e instanceof DOMException || e instanceof Error) &&
+            e.name === "AbortError";
           setError(
             e instanceof ApiError
               ? e.message
-              : tRef.current("campaignDetail.loadError")
+              : aborted
+                ? tRef.current("campaignDetail.loadTimeout")
+                : tRef.current("campaignDetail.loadError")
           );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -121,9 +150,16 @@ export default function CampaignDetailPage() {
   async function onSaveCampaign(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const maxDay = Math.min(2000, Math.max(1, Math.floor(maxEmailsPerDay)));
+    const mn = Math.min(1440, Math.max(1, Math.floor(delayMinMinutes)));
+    const mx = Math.min(1440, Math.max(1, Math.floor(delayMaxMinutes)));
+    if (mn > mx) {
+      setError(t("campaignDetail.delayOrderError"));
+      return;
+    }
     setSaving(true);
     try {
-      const updated = await apiJson<Campaign>(`/api/campaigns/${id}`, {
+      await apiJson<Campaign>(`/api/campaigns/${id}`, {
         method: "PATCH",
         body: JSON.stringify({
           name,
@@ -131,53 +167,17 @@ export default function CampaignDetailPage() {
           first_email_rules: firstRules,
           follow_up_rules: followRules,
           status,
+          max_emails_per_day: maxDay,
+          send_delay_min_seconds: mn * 60,
+          send_delay_max_seconds: mx * 60,
         }),
       });
-      setCampaign(updated);
+      router.push("/dashboard/campaigns");
+      router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("campaignDetail.saveError"));
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function onCsv(ev: React.ChangeEvent<HTMLInputElement>) {
-    const file = ev.target.files?.[0];
-    ev.target.value = "";
-    if (!file) return;
-    setImportMessage(null);
-    setError(null);
-    setImporting(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await apiFetch(`/api/campaigns/${id}/leads/import`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        let msg = res.statusText;
-        try {
-          const j = (await res.json()) as { detail?: string };
-          if (typeof j.detail === "string") msg = j.detail;
-        } catch {
-          /* ignore */
-        }
-        throw new ApiError(msg, res.status);
-      }
-      const result = (await res.json()) as LeadImportResult;
-      setImportMessage(
-        t("campaignDetail.importSummary", {
-          created: result.created,
-          skipped: result.skipped,
-          errors: result.errors.length,
-        })
-      );
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("campaignDetail.importError"));
-    } finally {
-      setImporting(false);
     }
   }
 
@@ -231,8 +231,6 @@ export default function CampaignDetailPage() {
     return <PageLoader fullscreen />;
   }
 
-  const pageBusy = saving || importing;
-
   if (!campaign) {
     return (
       <div className="space-y-4">
@@ -248,8 +246,7 @@ export default function CampaignDetailPage() {
   }
 
   return (
-    <div className="relative mx-auto max-w-5xl space-y-8">
-      {pageBusy ? <PageLoader fullscreen /> : null}
+    <div className="relative w-full max-w-none space-y-8">
       <div>
         <Link
           href="/dashboard/campaigns"
@@ -305,6 +302,60 @@ export default function CampaignDetailPage() {
                 )}
               </select>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {t("campaignDetail.throttleIntro")}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="max_emails_per_day">
+                  {t("campaignDetail.maxEmailsPerDay")}
+                </Label>
+                <Input
+                  id="max_emails_per_day"
+                  type="number"
+                  min={1}
+                  max={2000}
+                  required
+                  value={maxEmailsPerDay}
+                  onChange={(ev) => setMaxEmailsPerDay(Number(ev.target.value))}
+                  disabled={saving}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="delay_min_minutes">
+                  {t("campaignDetail.delayMinMinutes")}
+                </Label>
+                <Input
+                  id="delay_min_minutes"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  required
+                  value={delayMinMinutes}
+                  onChange={(ev) =>
+                    setDelayMinMinutes(Number(ev.target.value))
+                  }
+                  disabled={saving}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="delay_max_minutes">
+                  {t("campaignDetail.delayMaxMinutes")}
+                </Label>
+                <Input
+                  id="delay_max_minutes"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  required
+                  value={delayMaxMinutes}
+                  onChange={(ev) =>
+                    setDelayMaxMinutes(Number(ev.target.value))
+                  }
+                  disabled={saving}
+                />
+              </div>
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="system_prompt">{t("campaignDetail.systemPrompt")}</Label>
               <Textarea
@@ -327,6 +378,9 @@ export default function CampaignDetailPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="follow_up_rules">{t("campaignDetail.followUpRules")}</Label>
+              <p className="text-xs text-muted-foreground">
+                {t("campaignDetail.followUpRulesHint")}
+              </p>
               <Textarea
                 id="follow_up_rules"
                 required
@@ -350,6 +404,7 @@ export default function CampaignDetailPage() {
             <Button
               type="button"
               variant="destructive"
+              disabled={saving}
               onClick={removeCampaign}
             >
               <Trash2 className="mr-2 size-4" />
@@ -358,46 +413,6 @@ export default function CampaignDetailPage() {
           </CardContent>
         </Card>
       </form>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("campaignDetail.csvTitle")}</CardTitle>
-          <CardDescription>{t("campaignDetail.csvDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label
-              className={cn(
-                buttonVariants({ variant: "outline" }),
-                importing && "pointer-events-none opacity-50",
-                "cursor-pointer"
-              )}
-            >
-              {importing ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  {t("campaignDetail.importing")}
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 size-4" />
-                  {t("campaignDetail.chooseCsv")}
-                </>
-              )}
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                className="sr-only"
-                disabled={importing}
-                onChange={onCsv}
-              />
-            </label>
-          </div>
-          {importMessage ? (
-            <p className="text-sm text-muted-foreground">{importMessage}</p>
-          ) : null}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -415,10 +430,14 @@ export default function CampaignDetailPage() {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="pb-2 pr-3 font-medium">{t("campaignDetail.tableEmail")}</th>
-                    <th className="pb-2 pr-3 font-medium">{t("campaignDetail.tableNameCol")}</th>
-                    <th className="pb-2 pr-3 font-medium">{t("campaignDetail.tableCompany")}</th>
+                    <th className="pb-2 pr-3 font-medium">
+                      {t("leadsPage.tableCompany")}
+                    </th>
                     <th className="pb-2 pr-3 font-medium">{t("campaignDetail.tablePain")}</th>
                     <th className="pb-2 pr-3 font-medium">{t("campaignDetail.tableStatus")}</th>
+                    <th className="pb-2 pr-3 text-center font-medium">
+                      {t("campaignDetail.tableEmails")}
+                    </th>
                     <th className="pb-2 font-medium" />
                   </tr>
                 </thead>
@@ -427,12 +446,12 @@ export default function CampaignDetailPage() {
                     <tr key={l.id} className="border-b border-border/60">
                       <td className="py-2 pr-3 align-middle">{l.email}</td>
                       <td className="py-2 pr-3 align-middle">
-                        {l.first_name ?? t("common.notAvailable")}
+                        <LeadCompanyCell
+                          lead={l}
+                          emptyLabel={t("common.notAvailable")}
+                        />
                       </td>
-                      <td className="py-2 pr-3 align-middle">
-                        {l.company_name ?? t("common.notAvailable")}
-                      </td>
-                      <td className="max-w-[180px] truncate py-2 pr-3 align-middle text-muted-foreground" title={l.pain_point ?? ""}>
+                      <td className="min-w-[12rem] max-w-xl whitespace-normal break-words py-2 pr-3 align-middle text-muted-foreground" title={l.pain_point ?? ""}>
                         {l.pain_point ?? t("common.notAvailable")}
                       </td>
                       <td className="py-2 pr-3 align-middle">
@@ -454,6 +473,13 @@ export default function CampaignDetailPage() {
                             )
                           )}
                         </select>
+                      </td>
+                      <td className="py-2 pr-3 text-center align-middle">
+                        <LeadEmailHistoryTrigger
+                          leadId={l.id}
+                          leadEmail={l.email}
+                          variant="icon"
+                        />
                       </td>
                       <td className="py-2 text-right align-middle">
                         <Button

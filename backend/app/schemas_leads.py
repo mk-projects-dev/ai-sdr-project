@@ -6,12 +6,20 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models import LeadStatus
+from app.models import EmailDirection, LeadStatus
+
+
+class LeadBulkAssign(BaseModel):
+    lead_ids: list[UUID] = Field(..., min_length=1)
+    campaign_id: UUID
+
+
+class LeadBulkAssignResult(BaseModel):
+    updated: int
 
 
 class LeadCreate(BaseModel):
     email: EmailStr
-    first_name: Optional[str] = Field(default=None, max_length=255)
     company_name: Optional[str] = Field(default=None, max_length=512)
     pain_point: Optional[str] = None
     status: LeadStatus = LeadStatus.new
@@ -19,7 +27,6 @@ class LeadCreate(BaseModel):
 
 class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
-    first_name: Optional[str] = Field(default=None, max_length=255)
     company_name: Optional[str] = Field(default=None, max_length=512)
     pain_point: Optional[str] = None
     status: Optional[LeadStatus] = None
@@ -27,9 +34,9 @@ class LeadUpdate(BaseModel):
 
 class LeadRead(BaseModel):
     id: UUID
-    campaign_id: UUID
+    campaign_id: Optional[UUID] = None
+    campaign_name: Optional[str] = None
     email: str
-    first_name: Optional[str]
     company_name: Optional[str]
     pain_point: Optional[str]
     source: Optional[str] = None
@@ -48,3 +55,14 @@ class LeadImportResult(BaseModel):
     created: int
     skipped: int
     errors: list[LeadImportRowError]
+
+
+class EmailInteractionRead(BaseModel):
+    id: UUID
+    direction: EmailDirection
+    subject: str
+    body: str
+    ai_intent: Optional[str] = None
+    sent_at: datetime
+
+    model_config = {"from_attributes": True}

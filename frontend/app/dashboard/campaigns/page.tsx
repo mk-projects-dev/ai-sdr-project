@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { Loader2, Pause, Play, Plus, Trash2 } from "lucide-react";
 
 import { PageLoader } from "@/components/page-loader";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -35,6 +35,8 @@ export default function CampaignsPage() {
   const [items, setItems] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,12 +58,53 @@ export default function CampaignsPage() {
     };
   }, []);
 
+  async function patchCampaignStatus(campaignId: string, status: CampaignStatus) {
+    setError(null);
+    setStatusUpdatingId(campaignId);
+    try {
+      const updated = await apiJson<Campaign>(`/api/campaigns/${campaignId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      setItems((prev) =>
+        prev.map((c) => (c.id === campaignId ? updated : c))
+      );
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : t("campaigns.statusUpdateError")
+      );
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  }
+
+  async function deleteCampaignRow(campaignId: string, campaignName: string) {
+    if (
+      !confirm(
+        t("campaigns.confirmDeleteCampaign", { name: campaignName })
+      )
+    )
+      return;
+    setError(null);
+    setDeletingId(campaignId);
+    try {
+      await apiJson(`/api/campaigns/${campaignId}`, { method: "DELETE" });
+      setItems((prev) => prev.filter((c) => c.id !== campaignId));
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : t("campaigns.deleteCampaignError")
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (loading) {
     return <PageLoader fullscreen />;
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="w-full max-w-none space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
@@ -99,7 +142,9 @@ export default function CampaignsPage() {
                   <tr className="border-b border-border">
                     <th className="pb-2 pr-4 font-medium">{t("campaigns.tableName")}</th>
                     <th className="pb-2 pr-4 font-medium">{t("campaigns.tableStatus")}</th>
-                    <th className="pb-2 font-medium" />
+                    <th className="pb-2 text-right font-medium">
+                      {t("campaigns.tableActions")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -116,15 +161,68 @@ export default function CampaignsPage() {
                       <td className="py-3 pr-4 text-muted-foreground">
                         {statusLabel[c.status] ?? c.status}
                       </td>
-                      <td className="py-3 text-right">
-                        <Link
-                          href={`/dashboard/campaigns/${c.id}`}
-                          className={cn(
-                            buttonVariants({ variant: "outline", size: "sm" })
-                          )}
-                        >
-                          {t("campaigns.tableOpen")}
-                        </Link>
+                      <td className="py-3">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            disabled={
+                              c.status === "active" ||
+                              statusUpdatingId !== null ||
+                              deletingId !== null
+                            }
+                            aria-label={t("campaigns.playAria")}
+                            title={t("campaigns.playAria")}
+                            onClick={() => patchCampaignStatus(c.id, "active")}
+                          >
+                            {statusUpdatingId === c.id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Play className="size-4 fill-current" aria-hidden />
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            disabled={
+                              c.status === "paused" ||
+                              statusUpdatingId !== null ||
+                              deletingId !== null
+                            }
+                            aria-label={t("campaigns.pauseAria")}
+                            title={t("campaigns.pauseAria")}
+                            onClick={() => patchCampaignStatus(c.id, "paused")}
+                          >
+                            {statusUpdatingId === c.id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Pause className="size-4" aria-hidden />
+                            )}
+                          </Button>
+                          <Link
+                            href={`/dashboard/campaigns/${c.id}`}
+                            className={cn(
+                              buttonVariants({ variant: "outline", size: "sm" })
+                            )}
+                          >
+                            {t("campaigns.tableOpen")}
+                          </Link>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-destructive hover:text-destructive"
+                            disabled={
+                              deletingId !== null || statusUpdatingId !== null
+                            }
+                            aria-label={t("campaigns.deleteCampaign")}
+                            onClick={() => deleteCampaignRow(c.id, c.name)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

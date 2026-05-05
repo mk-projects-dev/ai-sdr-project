@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app import models  # noqa: F401 — register ORM metadata
 from app.bootstrap import ensure_initial_admin
@@ -14,6 +15,91 @@ from app.database import Base, engine
 from app.routers import auth, campaigns, health, leads, parser
 from app.worker.imap_worker import imap_reply_worker_loop
 from app.worker.outreach_worker import outreach_worker_loop
+
+
+async def _ensure_postgres_lead_source_column(conn) -> None:
+    """create_all не добавляет новые колонки в уже существующие таблицы — только ALTER."""
+    if conn.engine.dialect.name != "postgresql":
+        return
+    await conn.execute(
+        text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(64)")
+    )
+    await conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_leads_source ON leads (source)")
+    )
+
+
+async def _ensure_campaign_send_throttle_columns(conn) -> None:
+    """Лимит писем/день и пауза между отправками (create_all не добавляет колонки в старые таблицы)."""
+    dialect = conn.engine.dialect.name
+    if dialect == "postgresql":
+        await conn.execute(
+            text(
+                "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS max_emails_per_day "
+                "INTEGER NOT NULL DEFAULT 50"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS send_delay_min_seconds "
+                "INTEGER NOT NULL DEFAULT 300"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS send_delay_max_seconds "
+                "INTEGER NOT NULL DEFAULT 1200"
+            )
+        )
+        return
+    if dialect == "sqlite":
+
+        def _add_sqlite_columns(sync_conn) -> None:
+            from sqlalchemy import inspect
+
+            insp = inspect(sync_conn)
+            cols = {c["name"] for c in insp.get_columns("campaigns")}
+            if "max_emails_per_day" not in cols:
+                sync_conn.execute(
+                    text(
+                        "ALTER TABLE campaigns ADD COLUMN max_emails_per_day "
+                        "INTEGER NOT NULL DEFAULT 50"
+                    )
+                )
+            if "send_delay_min_seconds" not in cols:
+                sync_conn.execute(
+                    text(
+                        "ALTER TABLE campaigns ADD COLUMN send_delay_min_seconds "
+                        "INTEGER NOT NULL DEFAULT 300"
+                    )
+                )
+            if "send_delay_max_seconds" not in cols:
+                sync_conn.execute(
+                    text(
+                        "ALTER TABLE campaigns ADD COLUMN send_delay_max_seconds "
+                        "INTEGER NOT NULL DEFAULT 1200"
+                    )
+                )
+
+        await conn.run_sync(_add_sqlite_columns)
+
+
+async def _ensure_postgres_lead_campaign_optional(conn) -> None:
+    """Лиды без кампании: campaign_id NULL, при удалении кампании — SET NULL."""
+    if conn.engine.dialect.name != "postgresql":
+        return
+    await conn.execute(
+        text("ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_campaign_id_fkey")
+    )
+    await conn.execute(
+        text("ALTER TABLE leads ALTER COLUMN campaign_id DROP NOT NULL")
+    )
+    await conn.execute(
+        text(
+            "ALTER TABLE leads ADD CONSTRAINT leads_campaign_id_fkey "
+            "FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL"
+        )
+    )
 
 
 def create_app(
@@ -28,6 +114,9 @@ def create_app(
     async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await _ensure_postgres_lead_source_column(conn)
+            await _ensure_postgres_lead_campaign_optional(conn)
+            await _ensure_campaign_send_throttle_columns(conn)
         await ensure_initial_admin()
         outreach_task = None
         imap_task = None

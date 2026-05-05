@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
+from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +21,34 @@ logger = logging.getLogger(__name__)
 _pipeline_lock = asyncio.Lock()
 
 
+def _start_of_day_utc() -> datetime:
+    now = datetime.now(timezone.utc)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def _count_outbound_today_for_campaign(
+    session: AsyncSession, campaign_id: UUID
+) -> int:
+    start = _start_of_day_utc()
+    q = (
+        select(func.count())
+        .select_from(EmailInteraction)
+        .join(Lead, EmailInteraction.lead_id == Lead.id)
+        .where(
+            Lead.campaign_id == campaign_id,
+            EmailInteraction.direction == EmailDirection.outbound,
+            EmailInteraction.ai_intent == "first_outreach",
+            EmailInteraction.sent_at >= start,
+        )
+    )
+    return int(await session.scalar(q) or 0)
+
+
 async def _pick_next_lead(session: AsyncSession) -> Lead | None:
+    """
+    Берём oldest new-lead из активных кампаний, у которых не исчерпан дневной лимит исходящих.
+    Лимит считается по UTC-календарному дню (совпадает с sent_at в БД).
+    """
     stmt = (
         select(Lead)
         .join(Campaign, Lead.campaign_id == Campaign.id)
@@ -29,16 +58,25 @@ async def _pick_next_lead(session: AsyncSession) -> Lead | None:
         )
         .options(joinedload(Lead.campaign))
         .order_by(Lead.created_at.asc())
-        .limit(1)
+        .limit(50)
     )
     result = await session.execute(stmt)
-    return result.scalars().first()
+    candidates = result.unique().scalars().all()
+    for lead in candidates:
+        if lead.campaign_id is None or lead.campaign is None:
+            continue
+        cap = lead.campaign.max_emails_per_day
+        used = await _count_outbound_today_for_campaign(session, lead.campaign_id)
+        if used < cap:
+            return lead
+    return None
 
 
 async def process_outreach_once() -> bool:
     """
-    Один проход: взять лида (new + активная кампания), сгенерировать письмо,
-    отправить SMTP, записать EmailInteraction и статус contacted.
+    Один проход: взять лида (new + активная кампания + не превышен дневной лимит),
+    сгенерировать письмо, отправить SMTP, записать EmailInteraction и статус contacted.
+    После успеха — случайная пауза между min/max секундам кампании (антиспам-поведение).
     """
     settings = get_settings()
     if not settings.anthropic_api_key:
@@ -53,11 +91,18 @@ async def process_outreach_once() -> bool:
             campaign = lead.campaign
             lead_id: UUID = lead.id
             lead_email = lead.email
-            lead_first_name = lead.first_name
             lead_company_name = lead.company_name
             lead_pain_point = lead.pain_point
             system_prompt = campaign.system_prompt
             first_rules = campaign.first_email_rules
+            delay_lo = min(
+                campaign.send_delay_min_seconds,
+                campaign.send_delay_max_seconds,
+            )
+            delay_hi = max(
+                campaign.send_delay_min_seconds,
+                campaign.send_delay_max_seconds,
+            )
 
         subject: str | None = None
         body: str | None = None
@@ -67,7 +112,6 @@ async def process_outreach_once() -> bool:
                 system_prompt=system_prompt,
                 first_email_rules=first_rules,
                 lead_email=lead_email,
-                lead_first_name=lead_first_name,
                 lead_company_name=lead_company_name,
                 lead_pain_point=lead_pain_point,
             )
@@ -105,6 +149,15 @@ async def process_outreach_once() -> bool:
                 )
 
         logger.info("Outreach stored for lead_id=%s", lead_id)
+
+        wait_s = random.uniform(float(delay_lo), float(delay_hi))
+        logger.info(
+            "Outreach throttle: sleeping %.1fs (campaign random delay %s–%ss)",
+            wait_s,
+            delay_lo,
+            delay_hi,
+        )
+        await asyncio.sleep(wait_s)
         return True
 
 

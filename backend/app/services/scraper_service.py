@@ -6,7 +6,6 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import quote_plus, urlparse
-from uuid import UUID
 
 import httpx
 from anthropic import AsyncAnthropic
@@ -14,12 +13,11 @@ from bs4 import BeautifulSoup
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeout
 from playwright.async_api import async_playwright
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
 from app.database import async_session_factory
-from app.models import Campaign, Lead, LeadStatus
+from app.models import Lead, LeadStatus
 
 logger = logging.getLogger(__name__)
 
@@ -311,25 +309,17 @@ async def generate_pain_point(
 
 
 async def run_maps_parser_job(
-    campaign_id: UUID,
     location: str,
     keyword: str,
     limit: int,
 ) -> None:
-    """Фоновая задача: Maps → боль (Claude) → email с сайта → Lead в БД."""
+    """Фоновая задача: Maps → боль (Claude) → email с сайта → Lead в БД (без кампании)."""
     logger.info(
-        "Parser job: campaign_id=%s location=%r keyword=%r limit=%s",
-        campaign_id,
+        "Parser job: location=%r keyword=%r limit=%s",
         location,
         keyword,
         limit,
     )
-
-    async with async_session_factory() as session:
-        r = await session.execute(select(Campaign).where(Campaign.id == campaign_id))
-        if r.scalar_one_or_none() is None:
-            logger.error("Parser: campaign %s not found", campaign_id)
-            return
 
     try:
         places = await scrape_google_maps_places(location, keyword, limit)
@@ -359,9 +349,8 @@ async def run_maps_parser_job(
 
         async with async_session_factory() as session:
             lead = Lead(
-                campaign_id=campaign_id,
+                campaign_id=None,
                 email=email,
-                first_name=None,
                 company_name=place.name,
                 pain_point=pain,
                 source="parser",

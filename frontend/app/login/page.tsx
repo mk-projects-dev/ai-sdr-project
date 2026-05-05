@@ -2,7 +2,6 @@
 
 import { FormEvent, useLayoutEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import { PageLoader } from "@/components/page-loader";
@@ -28,7 +27,6 @@ interface LoginResponse {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const t = useTranslations();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,11 +36,11 @@ export default function LoginPage() {
 
   useLayoutEffect(() => {
     if (getToken()) {
-      router.replace("/dashboard");
-    } else {
-      setSessionGate("ok");
+      window.location.replace("/dashboard/leads");
+      return;
     }
-  }, [router]);
+    setSessionGate("ok");
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -68,8 +66,7 @@ export default function LoginPage() {
       }
       const data = (await res.json()) as LoginResponse;
       setToken(data.access_token);
-      router.push("/dashboard");
-      router.refresh();
+      window.location.assign("/dashboard/leads");
     } catch {
       setError(t("login.errorNetwork"));
     } finally {

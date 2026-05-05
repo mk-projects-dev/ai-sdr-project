@@ -24,7 +24,7 @@ async def _auth_header() -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_create_campaign_and_import_csv_leads(client: AsyncClient) -> None:
+async def test_import_csv_global_then_bulk_assign(client: AsyncClient) -> None:
     headers = await _auth_header()
 
     cr = await client.post(
@@ -44,7 +44,7 @@ async def test_create_campaign_and_import_csv_leads(client: AsyncClient) -> None
     csv_body = "email,company_name\nalice@example.com,AliceCo\nbob@example.com,Bob Ltd\n"
     files = {"file": ("leads.csv", io.BytesIO(csv_body.encode("utf-8")), "text/csv")}
     ir = await client.post(
-        f"/api/campaigns/{campaign_id}/leads/import",
+        "/api/leads/import",
         headers=headers,
         files=files,
     )
@@ -53,12 +53,28 @@ async def test_create_campaign_and_import_csv_leads(client: AsyncClient) -> None
     assert result["created"] == 2
     assert result["skipped"] == 0
 
+    all_lr = await client.get("/api/leads", headers=headers)
+    assert all_lr.status_code == 200
+    pool = all_lr.json()
+    assert len(pool) == 2
+    lead_ids = [row["id"] for row in pool]
+    assert {row["email"] for row in pool} == {"alice@example.com", "bob@example.com"}
+    assert all(row.get("campaign_id") is None for row in pool)
+
+    ba = await client.post(
+        "/api/leads/bulk-assign",
+        headers=headers,
+        json={"lead_ids": lead_ids, "campaign_id": campaign_id},
+    )
+    assert ba.status_code == 200
+    assert ba.json()["updated"] == 2
+
     lr = await client.get(
         f"/api/campaigns/{campaign_id}/leads",
         headers=headers,
     )
     assert lr.status_code == 200
-    leads = lr.json()
-    assert len(leads) == 2
-    emails = {row["email"] for row in leads}
+    assigned = lr.json()
+    assert len(assigned) == 2
+    emails = {row["email"] for row in assigned}
     assert emails == {"alice@example.com", "bob@example.com"}

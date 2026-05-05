@@ -17,14 +17,11 @@ _HEADER_MAP: dict[str, str] = {
     "email": "email",
     "e-mail": "email",
     "mail": "email",
-    "first_name": "first_name",
-    "firstname": "first_name",
-    "first": "first_name",
-    "name": "first_name",
     "company_name": "company_name",
     "company": "company_name",
     "organization": "company_name",
     "org": "company_name",
+    "name": "company_name",
     "pain_point": "pain_point",
     "pain": "pain_point",
     "painpoint": "pain_point",
@@ -84,7 +81,6 @@ def parse_csv_leads(content: bytes) -> tuple[list[dict[str, Any]], list[tuple[in
         rows_out.append(
             {
                 "email": email_norm,
-                "first_name": mapped.get("first_name"),
                 "company_name": mapped.get("company_name"),
                 "pain_point": mapped.get("pain_point"),
             }

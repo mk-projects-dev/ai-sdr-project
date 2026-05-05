@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,6 +52,15 @@ class Campaign(Base):
         nullable=False,
         default=CampaignStatus.draft,
     )
+    max_emails_per_day: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=50
+    )
+    send_delay_min_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=300
+    )
+    send_delay_max_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1200
+    )
 
     leads: Mapped[list["Lead"]] = relationship("Lead", back_populates="campaign")
 
@@ -60,11 +69,13 @@ class Lead(Base):
     __tablename__ = "leads"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    campaign_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True
+    campaign_id: Mapped[Optional[UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     company_name: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     pain_point: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
@@ -77,7 +88,7 @@ class Lead(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    campaign: Mapped["Campaign"] = relationship("Campaign", back_populates="leads")
+    campaign: Mapped[Optional["Campaign"]] = relationship("Campaign", back_populates="leads")
     email_interactions: Mapped[list["EmailInteraction"]] = relationship(
         "EmailInteraction", back_populates="lead"
     )

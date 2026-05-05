@@ -17,7 +17,10 @@ async def send_outreach_email(
     subject: str,
     body: str,
 ) -> None:
-    """Отправляет одно plaintext-письмо через SMTP (STARTTLS на порту 587 по умолчанию)."""
+    """Отправляет письмо через SMTP: multipart/alternative (plain + HTML).
+
+    Plain часть — запасной вариант для клиентов без HTML; HTML часть ренерит теги вроде ``<br>``, ``<b>``.
+    """
     if settings.outreach_dry_run:
         logger.info(
             "[dry-run] Would send email to=%s subject=%r (not sending)",
@@ -33,7 +36,8 @@ async def send_outreach_email(
     msg["Subject"] = subject
     msg["From"] = settings.smtp_from_email
     msg["To"] = to_email
-    msg.set_content(body)
+    msg.set_content(body)  # plain text fallback
+    msg.add_alternative(body, subtype="html")  # HTML version
 
     await aiosmtplib.send(
         msg,
