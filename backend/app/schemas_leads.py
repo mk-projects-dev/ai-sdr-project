@@ -22,6 +22,8 @@ class LeadCreate(BaseModel):
     email: EmailStr
     company_name: Optional[str] = Field(default=None, max_length=512)
     pain_point: Optional[str] = None
+    website_url: Optional[str] = Field(default=None, max_length=2048)
+    maps_url: Optional[str] = Field(default=None, max_length=2048)
     status: LeadStatus = LeadStatus.new
 
 
@@ -29,6 +31,8 @@ class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
     company_name: Optional[str] = Field(default=None, max_length=512)
     pain_point: Optional[str] = None
+    website_url: Optional[str] = Field(default=None, max_length=2048)
+    maps_url: Optional[str] = Field(default=None, max_length=2048)
     status: Optional[LeadStatus] = None
 
 
@@ -39,6 +43,8 @@ class LeadRead(BaseModel):
     email: str
     company_name: Optional[str]
     pain_point: Optional[str]
+    website_url: Optional[str] = None
+    maps_url: Optional[str] = None
     source: Optional[str] = None
     status: LeadStatus
     created_at: datetime

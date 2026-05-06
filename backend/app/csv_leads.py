@@ -25,6 +25,10 @@ _HEADER_MAP: dict[str, str] = {
     "pain_point": "pain_point",
     "pain": "pain_point",
     "painpoint": "pain_point",
+    "website_url": "website_url",
+    "website": "website_url",
+    "url": "website_url",
+    "link": "website_url",
 }
 
 
@@ -83,6 +87,7 @@ def parse_csv_leads(content: bytes) -> tuple[list[dict[str, Any]], list[tuple[in
                 "email": email_norm,
                 "company_name": mapped.get("company_name"),
                 "pain_point": mapped.get("pain_point"),
+                "website_url": mapped.get("website_url"),
             }
         )
 

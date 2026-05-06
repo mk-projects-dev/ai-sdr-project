@@ -13,6 +13,7 @@ import {
   ChevronUp,
   ChevronsUpDown,
   FileDown,
+  Globe,
   Loader2,
   MapPin,
   Upload,
@@ -85,9 +86,64 @@ function formatLeadDateTime(iso: string): string {
 /** Matches backend `csv_leads.py` canonical headers (comma or semicolon also accepted on upload). */
 const LEADS_IMPORT_TEMPLATE_FILENAME = "leads_import_template.csv";
 
+function LeadSourceLinks({
+  lead,
+  websiteLabel,
+  mapsLabel,
+}: {
+  lead: Lead;
+  websiteLabel: string;
+  mapsLabel: string;
+}) {
+  const web = lead.website_url?.trim();
+  const maps = lead.maps_url?.trim();
+  if (!web && !maps) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const webHref = web
+    ? web.startsWith("http://") || web.startsWith("https://")
+      ? web
+      : `https://${web}`
+    : null;
+  return (
+    <div className="flex flex-wrap items-center gap-0.5">
+      {webHref ? (
+        <a
+          href={webHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon" }),
+            "size-8 shrink-0 text-muted-foreground hover:text-foreground",
+          )}
+          title={websiteLabel}
+          aria-label={websiteLabel}
+        >
+          <Globe className="size-4" aria-hidden />
+        </a>
+      ) : null}
+      {maps ? (
+        <a
+          href={maps}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon" }),
+            "size-8 shrink-0 text-muted-foreground hover:text-foreground",
+          )}
+          title={mapsLabel}
+          aria-label={mapsLabel}
+        >
+          <MapPin className="size-4" aria-hidden />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function downloadLeadsImportTemplateCsv() {
   const bom = "\uFEFF";
-  const header = "email,company_name,pain_point\n";
+  const header = "email,company_name,pain_point,website\n";
   const blob = new Blob([bom + header], {
     type: "text/csv;charset=utf-8",
   });
@@ -137,7 +193,8 @@ export default function LeadsPoolPage() {
   const [isParsing, setIsParsing] = useState(false);
   const [parserPolling, setParserPolling] = useState(false);
 
-  const baselineLeadIdsRef = useRef<Set<string>>(new Set());
+  /** ISO время старта текущего запуска с сервера (`POST /api/parser/run`), для сопоставления с `GET /api/parser/status`. */
+  const parserRunStartedAtRef = useRef<string | null>(null);
 
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [assigning, setAssigning] = useState(false);
@@ -195,84 +252,127 @@ export default function LeadsPoolPage() {
 
   useEffect(() => {
     if (!parserPolling) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [parserPolling]);
 
-    const baseline = baselineLeadIdsRef.current;
-    const pollMs = 7000;
-    const maxMs = 3 * 60 * 1000;
-    const stablePollsNeeded = 2;
+  useEffect(() => {
+    if (!parserPolling) return;
 
-    const startedAt = Date.now();
-    /** Максимум новых лидов за сессию парсинга; стабильность считаем когда два опроса подряд не выше пика. */
-    let peakAdded = 0;
-    let pollsStableAtPeak = 0;
+    const startedIso = parserRunStartedAtRef.current;
+    if (!startedIso) {
+      setParserPolling(false);
+      return;
+    }
+
+    const pollMs = 2000;
+    const maxMs = 4 * 60 * 1000;
+    const fetchDeadlineMs = 14_000;
+    const wallStart = Date.now();
     const timers: {
       intervalId?: number;
       firstId?: number;
+      watchdogId?: number;
     } = {};
     let cancelled = false;
 
-    const tick = async () => {
+    const cleanupTimers = () => {
+      if (timers.watchdogId !== undefined) window.clearTimeout(timers.watchdogId);
+      if (timers.firstId !== undefined) window.clearTimeout(timers.firstId);
+      if (timers.intervalId !== undefined) window.clearInterval(timers.intervalId);
+      timers.watchdogId = undefined;
+      timers.firstId = undefined;
+      timers.intervalId = undefined;
+    };
+
+    const finishOk = (created: number) => {
       if (cancelled) return;
-      if (Date.now() - startedAt > maxMs) {
-        if (timers.intervalId !== undefined)
-          window.clearInterval(timers.intervalId);
-        timers.intervalId = undefined;
-        try {
-          const data = await apiJson<Lead[]>("/api/leads");
-          setLeads(data);
-        } catch {
-          /* ignore */
-        }
-        setImportMessage(tRef.current("leadsPage.parserPollingTimeout"));
-        cancelled = true;
-        setParserPolling(false);
-        return;
-      }
-
-      try {
-        const data = await apiJson<Lead[]>("/api/leads");
-        if (cancelled) return;
-        setLeads(data);
-        const added = data.filter((l) => !baseline.has(l.id)).length;
-
-        if (added === 0) {
-          pollsStableAtPeak = 0;
-          return;
-        }
-
-        if (added > peakAdded) {
-          peakAdded = added;
-          pollsStableAtPeak = 0;
-        } else if (added === peakAdded) {
-          pollsStableAtPeak += 1;
-          if (pollsStableAtPeak >= stablePollsNeeded) {
-            if (timers.firstId !== undefined) window.clearTimeout(timers.firstId);
-            if (timers.intervalId !== undefined)
-              window.clearInterval(timers.intervalId);
-            cancelled = true;
-            setParserPolling(false);
-            setImportMessage(
-              tRef.current("leadsPage.parserDoneNew", { count: peakAdded })
-            );
-          }
-        } else {
-          peakAdded = added;
-          pollsStableAtPeak = 0;
-        }
-      } catch {
-        /* keep polling until timeout */
+      cancelled = true;
+      cleanupTimers();
+      parserRunStartedAtRef.current = null;
+      setParserPolling(false);
+      if (created > 0) {
+        setImportMessage(
+          tRef.current("leadsPage.parserDoneNew", { count: created }),
+        );
+      } else {
+        setImportMessage(tRef.current("leadsPage.parserDoneZero"));
       }
     };
 
-    timers.firstId = window.setTimeout(() => void tick(), 2500);
+    const finishTimeout = () => {
+      if (cancelled) return;
+      cancelled = true;
+      cleanupTimers();
+      parserRunStartedAtRef.current = null;
+      setParserPolling(false);
+      void loadLeads();
+      setImportMessage(tRef.current("leadsPage.parserPollingTimeout"));
+    };
+
+    /** Жёсткий предел по времени: не зависим от зависших fetch (иначе лоадер не уходит). */
+    timers.watchdogId = window.setTimeout(() => finishTimeout(), maxMs);
+
+    async function fetchJsonWithDeadline<T>(path: string): Promise<T> {
+      const ctrl = new AbortController();
+      const tid = window.setTimeout(() => ctrl.abort(), fetchDeadlineMs);
+      try {
+        return await apiJson<T>(path, { signal: ctrl.signal });
+      } finally {
+        window.clearTimeout(tid);
+      }
+    }
+
+    const tick = async () => {
+      if (cancelled) return;
+      if (Date.now() - wallStart > maxMs) {
+        finishTimeout();
+        return;
+      }
+      try {
+        const status = await fetchJsonWithDeadline<{
+          busy: boolean;
+          last_finished_at: string | null;
+          last_created_count: number;
+        }>("/api/parser/status");
+
+        try {
+          const leadsData = await fetchJsonWithDeadline<Lead[]>("/api/leads");
+          if (!cancelled) setLeads(leadsData);
+        } catch {
+          /* вторично */
+        }
+
+        const startTs = Date.parse(startedIso);
+        const finishedAt = status.last_finished_at;
+        const finishedTs = finishedAt ? Date.parse(finishedAt) : NaN;
+        const runLooksFinished =
+          !status.busy &&
+          Boolean(finishedAt) &&
+          !Number.isNaN(startTs) &&
+          !Number.isNaN(finishedTs) &&
+          finishedTs >= startTs - 2000;
+
+        if (runLooksFinished) {
+          finishOk(status.last_created_count);
+          return;
+        }
+      } catch {
+        /* до watchdog продолжаем опрос */
+      }
+    };
+
+    timers.firstId = window.setTimeout(() => void tick(), 400);
     timers.intervalId = window.setInterval(() => void tick(), pollMs);
 
     return () => {
       cancelled = true;
-      if (timers.firstId !== undefined) window.clearTimeout(timers.firstId);
-      if (timers.intervalId !== undefined) window.clearInterval(timers.intervalId);
+      cleanupTimers();
     };
-  }, [parserPolling]);
+  }, [parserPolling, loadLeads]);
 
   function toggleOne(id: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -478,16 +578,19 @@ export default function LeadsPoolPage() {
 
     setIsParsing(true);
     try {
-      const data = await apiJson<{ status: string }>("/api/parser/run", {
-        method: "POST",
-        body: JSON.stringify({
-          location: loc,
-          keyword: kw,
-          limit: lim,
-        }),
-      });
-      if (data.status === "started") {
-        baselineLeadIdsRef.current = new Set(leads.map((l) => l.id));
+      const data = await apiJson<{ status: string; started_at: string }>(
+        "/api/parser/run",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            location: loc,
+            keyword: kw,
+            limit: lim,
+          }),
+        },
+      );
+      if (data.status === "started" && data.started_at) {
+        parserRunStartedAtRef.current = data.started_at;
         setParserLocation("");
         setParserKeyword("");
         setParserLimit(10);
@@ -495,7 +598,13 @@ export default function LeadsPoolPage() {
         setParserPolling(true);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("leadsPage.parserError"));
+      if (err instanceof ApiError && err.status === 409) {
+        setError(t("leadsPage.parserAlreadyRunning"));
+      } else {
+        setError(
+          err instanceof ApiError ? err.message : t("leadsPage.parserError"),
+        );
+      }
     } finally {
       setIsParsing(false);
     }
@@ -557,9 +666,12 @@ export default function LeadsPoolPage() {
           <Button
             type="button"
             size="sm"
+            variant="outline"
             onClick={() => {
+              parserRunStartedAtRef.current = null;
               setParserPolling(false);
               void loadLeads();
+              setImportMessage(t("leadsPage.parserPollingDismissed"));
             }}
           >
             {t("leadsPage.parserPollingCancel")}
@@ -705,6 +817,9 @@ export default function LeadsPoolPage() {
                 />
               </TableHead>
               <SortableHead column="company" label={t("leadsPage.tableCompany")} />
+              <TableHead className="w-[4.5rem] whitespace-normal">
+                {t("leadsPage.tableSource")}
+              </TableHead>
               <SortableHead column="email" label={t("leadsPage.tableEmail")} />
               <SortableHead column="pain" label={t("leadsPage.tablePain")} />
               <SortableHead column="status" label={t("leadsPage.tableStatus")} />
@@ -722,13 +837,13 @@ export default function LeadsPoolPage() {
           <TableBody>
             {leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground">
+                <TableCell colSpan={9} className="text-muted-foreground">
                   {t("leadsPage.empty")}
                 </TableCell>
               </TableRow>
             ) : sortedLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground">
+                <TableCell colSpan={9} className="text-muted-foreground">
                   {t("leadsPage.filterEmpty")}
                 </TableCell>
               </TableRow>
@@ -746,6 +861,13 @@ export default function LeadsPoolPage() {
                     <LeadCompanyCell
                       lead={l}
                       emptyLabel={t("common.notAvailable")}
+                    />
+                  </TableCell>
+                  <TableCell className="align-middle">
+                    <LeadSourceLinks
+                      lead={l}
+                      websiteLabel={t("sourceLink")}
+                      mapsLabel={t("viewInMaps")}
                     />
                   </TableCell>
                   <TableCell>{l.email}</TableCell>

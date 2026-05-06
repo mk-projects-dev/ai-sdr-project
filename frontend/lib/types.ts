@@ -28,6 +28,8 @@ export interface Lead {
   email: string;
   company_name: string | null;
   pain_point: string | null;
+  website_url?: string | null;
+  maps_url?: string | null;
   source?: string | null;
   status: LeadStatus;
   created_at: string;

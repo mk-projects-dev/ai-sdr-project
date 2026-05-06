@@ -66,6 +66,13 @@ class Campaign(Base):
 
 
 class Lead(Base):
+    """Лид.
+
+    Ручная миграция PostgreSQL (если не используете патч в application lifespan):
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS website_url VARCHAR(2048);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS maps_url VARCHAR(2048);
+    """
+
     __tablename__ = "leads"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
@@ -78,6 +85,8 @@ class Lead(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     company_name: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     pain_point: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    website_url: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    maps_url: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
     source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[LeadStatus] = mapped_column(
         SAEnum(LeadStatus, name="lead_status", native_enum=True),

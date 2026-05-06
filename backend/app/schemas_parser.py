@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -13,3 +15,10 @@ class ParserRunRequest(BaseModel):
 
 class ParserRunResponse(BaseModel):
     status: str = "started"
+    started_at: str
+
+
+class ParserStatusResponse(BaseModel):
+    busy: bool
+    last_finished_at: Optional[str] = None
+    last_created_count: int = 0

@@ -78,3 +78,22 @@ async def test_import_csv_global_then_bulk_assign(client: AsyncClient) -> None:
     assert len(assigned) == 2
     emails = {row["email"] for row in assigned}
     assert emails == {"alice@example.com", "bob@example.com"}
+
+
+@pytest.mark.asyncio
+async def test_import_csv_maps_website_column_to_website_url(client: AsyncClient) -> None:
+    headers = await _auth_header()
+    csv_body = (
+        "email,company_name,link\ncarol@example.com,CarolCo,https://carol.example/page\n"
+    )
+    files = {"file": ("leads.csv", io.BytesIO(csv_body.encode("utf-8")), "text/csv")}
+    ir = await client.post("/api/leads/import", headers=headers, files=files)
+    assert ir.status_code == 200
+    assert ir.json()["created"] == 1
+
+    all_lr = await client.get("/api/leads", headers=headers)
+    assert all_lr.status_code == 200
+    pool = all_lr.json()
+    row = next(r for r in pool if r["email"] == "carol@example.com")
+    assert row.get("website_url") == "https://carol.example/page"
+    assert row.get("maps_url") in (None, "")

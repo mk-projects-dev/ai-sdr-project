@@ -34,6 +34,8 @@ def _lead_to_read(lead: Lead) -> LeadRead:
         email=str(lead.email),
         company_name=lead.company_name,
         pain_point=lead.pain_point,
+        website_url=lead.website_url,
+        maps_url=lead.maps_url,
         source=lead.source,
         status=lead.status,
         created_at=lead.created_at,
@@ -101,6 +103,7 @@ async def import_leads_csv_global(
             email=row["email"],
             company_name=row.get("company_name"),
             pain_point=row.get("pain_point"),
+            website_url=row.get("website_url"),
             status=LeadStatus.new,
         )
         db.add(lead)
@@ -177,6 +180,8 @@ async def create_lead(
         email=body.email,
         company_name=body.company_name,
         pain_point=body.pain_point,
+        website_url=body.website_url,
+        maps_url=body.maps_url,
         status=body.status,
     )
     db.add(lead)

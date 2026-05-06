@@ -29,6 +29,37 @@ async def _ensure_postgres_lead_source_column(conn) -> None:
     )
 
 
+async def _ensure_lead_source_link_columns(conn) -> None:
+    """Ссылки на сайт и карточку Google Maps (create_all не добавляет колонки в старые таблицы)."""
+
+    dialect = conn.engine.dialect.name
+    if dialect == "postgresql":
+        await conn.execute(
+            text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS website_url VARCHAR(2048)")
+        )
+        await conn.execute(
+            text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS maps_url VARCHAR(2048)")
+        )
+        return
+    if dialect == "sqlite":
+
+        def _add_sqlite_columns(sync_conn) -> None:
+            from sqlalchemy import inspect
+
+            insp = inspect(sync_conn)
+            cols = {c["name"] for c in insp.get_columns("leads")}
+            if "website_url" not in cols:
+                sync_conn.execute(
+                    text("ALTER TABLE leads ADD COLUMN website_url VARCHAR(2048)")
+                )
+            if "maps_url" not in cols:
+                sync_conn.execute(
+                    text("ALTER TABLE leads ADD COLUMN maps_url VARCHAR(2048)")
+                )
+
+        await conn.run_sync(_add_sqlite_columns)
+
+
 async def _ensure_campaign_send_throttle_columns(conn) -> None:
     """Лимит писем/день и пауза между отправками (create_all не добавляет колонки в старые таблицы)."""
     dialect = conn.engine.dialect.name
@@ -171,6 +202,7 @@ def create_app(
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await _ensure_postgres_lead_source_column(conn)
+            await _ensure_lead_source_link_columns(conn)
             await _ensure_postgres_lead_campaign_optional(conn)
             await _ensure_campaign_send_throttle_columns(conn)
             await _ensure_email_interaction_usage_columns(conn)
